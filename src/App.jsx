@@ -46,7 +46,9 @@ function App() {
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [agentLogs, setAgentLogs] = useState([]);
   
-  const [playbookMarkdown, setPlaybookMarkdown] = useState(null);
+  const [execPlaybook, setExecPlaybook] = useState(null);
+  const [techPlaybook, setTechPlaybook] = useState(null);
+  const [activeTab, setActiveTab] = useState('executive'); // 'executive' or 'technical'
   const [generatedResult, setGeneratedResult] = useState(null);
   const [error, setError] = useState(null);
 
@@ -75,23 +77,30 @@ function App() {
     });
   };
 
-  const handleGeneratePlaybook = async (mode = 'technical') => {
+  const handleGeneratePlaybook = async () => {
     if (formData.gcpOfferings.length === 0 || formData.cognizantOfferings.length === 0 || !formData.painPoint.trim()) {
       setError("Please ensure you have entered a pain point and selected at least one offering from both GCP and Cognizant.");
       return;
     }
-    
-    const isExecutive = mode === 'executive';
 
     setError(null);
     setIsGenerating(true);
-    setAgentLogs([]); // Clear logs on new run
+    setAgentLogs(["[System] Initializing Dual Engine Protocol..."]); 
+    
     try {
-      const markdown = await runAutonomousArchitectLoop(apiKey, formData, (msg) => {
+      const executiveDocs = await runAutonomousArchitectLoop(apiKey, formData, (msg) => {
         setAgentLogs(prev => [...prev, msg]);
-      }, isExecutive);
-      setPlaybookMarkdown(markdown);
-      setStep(4); // View Playbook Document
+      }, true);
+      setExecPlaybook(executiveDocs);
+
+      setAgentLogs(prev => [...prev, "\n============================================\n", "[System] C-Suite Framework Generated. Pivoting Engine State to Deep Architectural Integration..."]);
+
+      const technicalDocs = await runAutonomousArchitectLoop(apiKey, formData, (msg) => {
+        setAgentLogs(prev => [...prev, msg]);
+      }, false);
+      setTechPlaybook(technicalDocs);
+
+      setStep(4); // View Playbook Document Tab
     } catch (err) {
       setError("Playbook autonomous engine failed: " + err.message);
     } finally {
@@ -99,11 +108,21 @@ function App() {
     }
   };
 
+  const downloadMarkdown = (content, title) => {
+    const element = document.createElement("a");
+    const file = new Blob([content], {type: 'text/markdown'});
+    element.href = URL.createObjectURL(file);
+    element.download = `${title.replace(/\s+/g, '_')}_Playbook.md`;
+    document.body.appendChild(element);
+    element.click();
+  };
+
   const handleSummarizeToPPT = async () => {
     setError(null);
     setIsSummarizing(true);
     try {
-      const result = await extractSlidesFromPlaybook(apiKey, playbookMarkdown);
+      // Best practice: Auto-Summarize Executive Playbook for PPT presentations
+      const result = await extractSlidesFromPlaybook(apiKey, execPlaybook);
       setGeneratedResult(result);
       setStep(5); // View Slide Previews
     } catch (err) {
@@ -114,7 +133,8 @@ function App() {
   };
 
   const resetFlow = () => {
-    setPlaybookMarkdown(null);
+    setExecPlaybook(null);
+    setTechPlaybook(null);
     setAgentLogs([]);
     setGeneratedResult(null);
     setStep(1);
@@ -260,32 +280,17 @@ function App() {
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2rem' }}>
             <button className="btn btn-secondary" onClick={() => setStep(2)} disabled={isGenerating}>Back</button>
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <button 
-                className="btn btn-primary" 
-                style={{ background: '#10b981', borderColor: '#10b981', color: '#fff' }}
-                onClick={() => handleGeneratePlaybook('executive')}
-                disabled={isGenerating}
-              >
-                {isGenerating ? (
-                  <><div className="spinner"></div> Agents Iterating...</>
-                ) : (
-                  'Launch Executive/Marketing Loop'
-                )}
-              </button>
-              
-              <button 
-                className="btn btn-primary" 
-                onClick={() => handleGeneratePlaybook('technical')}
-                disabled={isGenerating}
-              >
-                {isGenerating ? (
-                  <><div className="spinner"></div> Agents Iterating...</>
-                ) : (
-                  'Launch Technical Architecture Loop'
-                )}
-              </button>
-            </div>
+            <button 
+              className="btn btn-primary" 
+              onClick={handleGeneratePlaybook}
+              disabled={isGenerating}
+            >
+              {isGenerating ? (
+                <><div className="spinner"></div> Agents Iterating...</>
+              ) : (
+                'Launch Dual-Autonomous Engine'
+              )}
+            </button>
           </div>
 
           {isGenerating && (
@@ -315,10 +320,24 @@ function App() {
         </div>
       )}
 
-      {step === 4 && playbookMarkdown && (
+      {step === 4 && execPlaybook && techPlaybook && (
         <div className="animate-fade-in">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h2>1. Comprehensive Playbook</h2>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button 
+                className={`btn ${activeTab === 'executive' ? 'btn-primary' : 'btn-secondary'}`} 
+                onClick={() => setActiveTab('executive')}
+                style={activeTab === 'executive' ? { background: '#10b981', borderColor: '#10b981', color: '#ffffff' } : {}}
+              >
+                Executive Strategy View
+              </button>
+              <button 
+                className={`btn ${activeTab === 'technical' ? 'btn-primary' : 'btn-secondary'}`} 
+                onClick={() => setActiveTab('technical')}
+              >
+                Technical Architecture View
+              </button>
+            </div>
             <div>
                <button className="btn btn-secondary" style={{ marginRight: '1rem' }} onClick={resetFlow} disabled={isSummarizing}>
                  Start Over
@@ -333,8 +352,17 @@ function App() {
             </div>
           </div>
           
-          <div className="glass-panel markdown-body" style={{ background: '#f8f9fa', color: '#1f2937', padding: '2.5rem', borderRadius: '12px', textAlign: 'left', overflowY: 'auto', maxHeight: '70vh', boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.05)' }}>
-            <ReactMarkdown>{playbookMarkdown}</ReactMarkdown>
+          <div className="glass-panel markdown-body" style={{ background: '#f8f9fa', color: '#1f2937', padding: '2.5rem', borderRadius: '12px', textAlign: 'left', overflowY: 'auto', maxHeight: '65vh', boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.05)' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+              <button 
+                className="btn btn-secondary" 
+                style={{ fontSize: '0.8rem', padding: '0.5rem' }} 
+                onClick={() => activeTab === 'executive' ? downloadMarkdown(execPlaybook, 'GTM_Executive') : downloadMarkdown(techPlaybook, 'Technical_Architecture')}
+              >
+                📥 Download {activeTab === 'executive' ? 'Executive' : 'Technical'} Document (.md)
+              </button>
+            </div>
+            <ReactMarkdown>{activeTab === 'executive' ? execPlaybook : techPlaybook}</ReactMarkdown>
           </div>
         </div>
       )}
