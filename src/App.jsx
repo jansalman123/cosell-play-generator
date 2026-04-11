@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { generateSalesPlay } from './utils/gemini';
+import { generateComprehensivePlaybook, extractSlidesFromPlaybook } from './utils/gemini';
+import { generateAndDownloadPPTX } from './utils/pptExport';
 
 const INDUSTRIES = [
   "Healthcare & Life Sciences",
@@ -28,8 +29,9 @@ const COGNIZANT_OFFERINGS = [
 ];
 
 function App() {
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
-  const [isConfigured, setIsConfigured] = useState(!!localStorage.getItem('gemini_api_key'));
+  const ENV_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+  const [apiKey, setApiKey] = useState(() => ENV_KEY || localStorage.getItem('gemini_api_key') || '');
+  const [isConfigured, setIsConfigured] = useState(() => !!ENV_KEY || !!localStorage.getItem('gemini_api_key'));
   
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
@@ -40,6 +42,9 @@ function App() {
   });
 
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  
+  const [playbookMarkdown, setPlaybookMarkdown] = useState(null);
   const [generatedResult, setGeneratedResult] = useState(null);
   const [error, setError] = useState(null);
 
@@ -68,7 +73,7 @@ function App() {
     });
   };
 
-  const handleGenerate = async () => {
+  const handleGeneratePlaybook = async () => {
     if (formData.gcpOfferings.length === 0 || formData.cognizantOfferings.length === 0 || !formData.painPoint.trim()) {
       setError("Please ensure you have entered a pain point and selected at least one offering from both GCP and Cognizant.");
       return;
@@ -77,17 +82,32 @@ function App() {
     setError(null);
     setIsGenerating(true);
     try {
-      const result = await generateSalesPlay(apiKey, formData);
-      setGeneratedResult(result);
-      setStep(4); // View Result
+      const markdown = await generateComprehensivePlaybook(apiKey, formData);
+      setPlaybookMarkdown(markdown);
+      setStep(4); // View Playbook Document
     } catch (err) {
-      setError("Generation failed: " + err.message);
+      setError("Playbook generation failed: " + err.message);
     } finally {
       setIsGenerating(false);
     }
   };
 
+  const handleSummarizeToPPT = async () => {
+    setError(null);
+    setIsSummarizing(true);
+    try {
+      const result = await extractSlidesFromPlaybook(apiKey, playbookMarkdown);
+      setGeneratedResult(result);
+      setStep(5); // View Slide Previews
+    } catch (err) {
+      setError("PPT summarization failed: " + err.message);
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
   const resetFlow = () => {
+    setPlaybookMarkdown(null);
     setGeneratedResult(null);
     setStep(1);
     setFormData({
@@ -234,27 +254,70 @@ function App() {
             <button className="btn btn-secondary" onClick={() => setStep(2)} disabled={isGenerating}>Back</button>
             <button 
               className="btn btn-primary" 
-              onClick={handleGenerate}
+              onClick={handleGeneratePlaybook}
               disabled={isGenerating}
             >
               {isGenerating ? (
-                <><div className="spinner"></div> Generating Play...</>
+                <><div className="spinner"></div> Authoring Playbook...</>
               ) : (
-                'Generate Sales Play'
+                'Author Comprehensive Playbook'
               )}
             </button>
           </div>
         </div>
       )}
 
-      {step === 4 && generatedResult && (
+      {step === 4 && playbookMarkdown && (
         <div className="animate-fade-in">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h2>Generated Sales Play</h2>
-            <button className="btn btn-secondary" onClick={resetFlow}>Create Another</button>
+            <h2>1. Comprehensive Playbook</h2>
+            <div>
+               <button className="btn btn-secondary" style={{ marginRight: '1rem' }} onClick={resetFlow} disabled={isSummarizing}>
+                 Start Over
+               </button>
+               <button className="btn btn-primary" onClick={handleSummarizeToPPT} disabled={isSummarizing}>
+                  {isSummarizing ? (
+                    <><div className="spinner"></div> Summarizing...</>
+                  ) : (
+                    'Summarize into Executive PPT'
+                  )}
+               </button>
+            </div>
           </div>
-          <div className="glass-panel markdown-container">
-            <ReactMarkdown>{generatedResult}</ReactMarkdown>
+          
+          <div className="glass-panel markdown-body" style={{ background: '#f8f9fa', color: '#1f2937', padding: '2.5rem', borderRadius: '12px', textAlign: 'left', overflowY: 'auto', maxHeight: '70vh', boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.05)' }}>
+            <ReactMarkdown>{playbookMarkdown}</ReactMarkdown>
+          </div>
+        </div>
+      )}
+
+      {step === 5 && generatedResult && generatedResult.slides && (
+        <div className="animate-fade-in">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h2>2. Executive Slide Preview</h2>
+            <div>
+               <button className="btn btn-secondary" style={{ marginRight: '1rem' }} onClick={() => setStep(4)}>Back to Playbook</button>
+               <button className="btn btn-primary" onClick={() => generateAndDownloadPPTX(generatedResult, formData)}>
+                  ⇩ Download Full Presentation
+               </button>
+            </div>
+          </div>
+          
+          <div className="slides-preview-grid" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            {generatedResult.slides.map((slide, index) => (
+               <div key={index} className="glass-panel" style={{ borderLeft: '4px solid #4285F4', padding: '2rem' }}>
+                  <h3 style={{ fontSize: '1.5rem', color: '#fff', marginTop: 0 }}>{slide.title}</h3>
+                  {slide.subtitle && <p style={{ color: '#4285F4', fontStyle: 'italic', fontWeight: 'bold' }}>{slide.subtitle}</p>}
+                  
+                  <ul style={{ listStyleType: 'none', paddingLeft: 0, marginTop: '1.5rem' }}>
+                    {slide.bulletPoints && slide.bulletPoints.map((point, i) => (
+                      <li key={i} style={{ marginBottom: '1rem', fontSize: '1.1rem', color: '#f0f6fc', display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                        <span>{point}</span>
+                      </li>
+                    ))}
+                  </ul>
+               </div>
+            ))}
           </div>
         </div>
       )}
