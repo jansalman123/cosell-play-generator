@@ -16,11 +16,11 @@ export async function runAutonomousArchitectLoop(apiKey, data, onLog, isExecutiv
   
   const authorGoal = isExecutiveMode 
     ? "Create a high-level, persuasive 5-page Executive Sales Playbook. Focus entirely on business objectives, ROI, competitive positioning, and time-to-market. Ban deep technical API specifications. Speak directly to C-Suite buyers."
-    : "Create a highly technical 5-page internal architecture playbook. Ban marketing fluff. Detail specific architectural data flows, CI/CD, and security compliance mechanics integrations between the chosen tech stacks.";
+    : "Create a 5-page enterprise Integration and Implementation Architecture Playbook. Ban marketing fluff. Focus on how the systems connect, major architectural data flows, and integration boundaries. CRITICAL: Do NOT output overly granular 'garbage' details like raw terminal command lines, script blocks, precise IP CIDR ranges, or low-level configurations. Keep it structural.";
 
   const criticGoal = isExecutiveMode
     ? `Your job is to reject it if it becomes too technical, uses complex engineering jargon, or fails to highlight explicit business ROI and competitive advantages.`
-    : `Your job is to reject it if it contains marketing fluff, lacks deep technical specifics (e.g., missing IAM, API Gateway flows, accurate GCP topologies), or is too sparse.`;
+    : `Your job is to reject it if it contains marketing fluff, lacks structural integration specifics, OR if it contains overly granular details like raw terminal command lines, script blocks, or precise IP subnets. Force the author to focus strictly on high-level systems integration architecture.`;
 
   onLog(`[System] Launching ${authorPersona} Agent...`);
   
