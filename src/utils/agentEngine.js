@@ -21,8 +21,12 @@ Business Core Challenge: ${data.painPoint}
 GCP Capabilities: ${data.gcpOfferings.join(', ')}
 Cognizant Frameworks: ${data.cognizantOfferings.join(', ')}
 
-Create a highly technical 5-page internal architecture playbook using professional Markdown.
+Create a highly technical 5-page internal architecture playbook.
 Ban marketing fluff. Detail specific architectural data flows, CI/CD, and security compliance mechanics integrations between the chosen tech stacks.
+
+CRITICAL FORMATTING INSTRUCTION:
+You MUST use strict Markdown formatting. Every single section and subsection title MUST start with markdown hashes (e.g. "# 1. Executive Summary", "## 1.1 Topologies", "### 1.1.1 Network"). 
+Do not just use plain text numbers. Use bolding and bulleted lists heavily to make the document highly readable.
 `;
 
   try {
@@ -95,6 +99,10 @@ GCP Offerings: ${data.gcpOfferings.join(', ')}
 Cognizant Offerings: ${data.cognizantOfferings.join(', ')}
 
 Ensure the new output is fundamentally robust. Provide the fully updated Markdown playbook now. Do not include apologies or conversational filler.
+
+CRITICAL FORMATTING INSTRUCTION:
+You MUST use strict Markdown formatting. Every single section and subsection title MUST start with markdown hashes (e.g. "# 1. Executive Summary", "## 1.1 Topologies", "### 1.1.1 Network"). 
+Do not just use plain text numbers. Use bolding and bulleted lists heavily to make the document highly readable.
 `;
       draft = await executeGeminiRequest(apiKey, correctionPrompt, false);
       onLog(`[Architect] Iterative rework completed. Resubmitting structure...`);
