@@ -71,7 +71,7 @@ Ensure the presentation includes 6 slides summarizing the play:
  */
 async function executeGeminiRequest(apiKey, promptText, expectJson) {
   try {
-    const response = await fetch(\`https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=\${apiKey}\`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -88,7 +88,7 @@ async function executeGeminiRequest(apiKey, promptText, expectJson) {
     let textOut = resultData.candidates[0].content.parts[0].text;
     
     if (expectJson) {
-      textOut = textOut.replace(/\\`\\`\\`json/g, "").replace(/\\`\\`\\`/g, "").trim();
+      textOut = textOut.replace(/```json/g, "").replace(/```/g, "").trim();
       return JSON.parse(textOut);
     }
 
