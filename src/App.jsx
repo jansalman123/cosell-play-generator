@@ -75,19 +75,21 @@ function App() {
     });
   };
 
-  const handleGeneratePlaybook = async () => {
+  const handleGeneratePlaybook = async (mode = 'technical') => {
     if (formData.gcpOfferings.length === 0 || formData.cognizantOfferings.length === 0 || !formData.painPoint.trim()) {
       setError("Please ensure you have entered a pain point and selected at least one offering from both GCP and Cognizant.");
       return;
     }
     
+    const isExecutive = mode === 'executive';
+
     setError(null);
     setIsGenerating(true);
     setAgentLogs([]); // Clear logs on new run
     try {
       const markdown = await runAutonomousArchitectLoop(apiKey, formData, (msg) => {
         setAgentLogs(prev => [...prev, msg]);
-      });
+      }, isExecutive);
       setPlaybookMarkdown(markdown);
       setStep(4); // View Playbook Document
     } catch (err) {
@@ -258,17 +260,32 @@ function App() {
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2rem' }}>
             <button className="btn btn-secondary" onClick={() => setStep(2)} disabled={isGenerating}>Back</button>
-            <button 
-              className="btn btn-primary" 
-              onClick={handleGeneratePlaybook}
-              disabled={isGenerating}
-            >
-              {isGenerating ? (
-                <><div className="spinner"></div> Agents Iterating...</>
-              ) : (
-                'Launch Autonomous Loop'
-              )}
-            </button>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button 
+                className="btn btn-primary" 
+                style={{ background: '#10b981', borderColor: '#10b981', color: '#fff' }}
+                onClick={() => handleGeneratePlaybook('executive')}
+                disabled={isGenerating}
+              >
+                {isGenerating ? (
+                  <><div className="spinner"></div> Agents Iterating...</>
+                ) : (
+                  'Launch Executive/Marketing Loop'
+                )}
+              </button>
+              
+              <button 
+                className="btn btn-primary" 
+                onClick={() => handleGeneratePlaybook('technical')}
+                disabled={isGenerating}
+              >
+                {isGenerating ? (
+                  <><div className="spinner"></div> Agents Iterating...</>
+                ) : (
+                  'Launch Technical Architecture Loop'
+                )}
+              </button>
+            </div>
           </div>
 
           {isGenerating && (
