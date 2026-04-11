@@ -34,8 +34,10 @@ Cognizant Frameworks: ${data.cognizantOfferings.join(', ')}
 
 ${authorGoal}
 
-CRITICAL FORMATTING INSTRUCTION:
-You MUST use strict Markdown formatting. Every single section and subsection title MUST start with markdown hashes (e.g. "# 1. Executive Summary", "## 1.1 Competitors", "### 1.1.1 Landscape"). 
+CRITICAL RULES:
+1. Do NOT hallucinate. All assertions must be purely factual.
+2. Do NOT invent fictitious case studies or fake metrics. Base all capabilities strictly on official Google Cloud and Cognizant service boundaries.
+3. You MUST use strict Markdown formatting. Every single section and subsection title MUST start with markdown hashes (e.g. "# 1. Executive Summary", "## 1.1 Competitors", "### 1.1.1 Landscape"). 
 Do not just use plain text numbers. Use bolding and bulleted lists heavily to make the document highly readable.
 `;
 
@@ -110,8 +112,10 @@ Cognizant Offerings: ${data.cognizantOfferings.join(', ')}
 
 Ensure the new output is fundamentally robust. Provide the fully updated Markdown playbook now. Do not include apologies or conversational filler.
 
-CRITICAL FORMATTING INSTRUCTION:
-You MUST use strict Markdown formatting. Every single section and subsection title MUST start with markdown hashes (e.g. "# 1. Executive Summary", "## 1.1 Themes", "### 1.1.1 Tiers"). 
+CRITICAL RULES:
+1. Do NOT hallucinate. All assertions must be purely factual.
+2. Do NOT invent fictitious case studies or fake metrics. Base all capabilities strictly on official Google Cloud and Cognizant service boundaries.
+3. You MUST use strict Markdown formatting. Every single section and subsection title MUST start with markdown hashes (e.g. "# 1. Executive Summary", "## 1.1 Themes", "### 1.1.1 Tiers"). 
 Do not just use plain text numbers. Use bolding and bulleted lists heavily to make the document highly readable.
 `;
       draft = await executeGeminiRequest(apiKey, correctionPrompt, false);
