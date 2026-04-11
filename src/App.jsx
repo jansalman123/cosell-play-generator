@@ -121,8 +121,8 @@ function App() {
     setError(null);
     setIsSummarizing(true);
     try {
-      // Best practice: Auto-Summarize Executive Playbook for PPT presentations
-      const result = await extractSlidesFromPlaybook(apiKey, execPlaybook);
+      const activeContent = activeTab === 'executive' ? execPlaybook : techPlaybook;
+      const result = await extractSlidesFromPlaybook(apiKey, activeContent, activeTab);
       setGeneratedResult(result);
       setStep(5); // View Slide Previews
     } catch (err) {
@@ -346,7 +346,7 @@ function App() {
                   {isSummarizing ? (
                     <><div className="spinner"></div> Summarizing...</>
                   ) : (
-                    'Summarize into Executive PPT'
+                    `Summarize into ${activeTab === 'executive' ? 'Executive' : 'Technical'} PPT`
                   )}
                </button>
             </div>
@@ -370,7 +370,7 @@ function App() {
       {step === 5 && generatedResult && generatedResult.slides && (
         <div className="animate-fade-in">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h2>2. Executive Slide Preview</h2>
+            <h2>2. {activeTab === 'executive' ? 'Executive' : 'Technical'} Slide Preview</h2>
             <div>
                <button className="btn btn-secondary" style={{ marginRight: '1rem' }} onClick={() => setStep(4)}>Back to Playbook</button>
                <button className="btn btn-primary" onClick={() => generateAndDownloadPPTX(generatedResult, formData)}>

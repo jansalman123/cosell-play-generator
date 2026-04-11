@@ -2,10 +2,15 @@
  * Summarizes a previously generated Markdown playbook into a strict JSON schema for presentation slides.
  * This represents the "Executive Designer Agent Persona".
  */
-export async function extractSlidesFromPlaybook(apiKey, markdownText) {
+export async function extractSlidesFromPlaybook(apiKey, markdownText, mode = 'executive') {
+  const persona = mode === 'executive' ? 'top-tier executive presentation designer' : 'lead technical presentation designer';
+  const structuralSlides = mode === 'executive'
+    ? `1. Executive Summary\n2. Business Value & ROI\n3. Target Operating Model\n4. Core Differentiation\n5. Cognizant Strategic Value\n6. High-Level Timeline`
+    : `1. Architecture Summary\n2. Target State Integration\n3. Google Cloud Blueprint\n4. Cognizant Delivery IP\n5. Security & Governance\n6. Technical Roadmap KPIs`;
+
   const prompt = `
-You are a top-tier executive presentation designer. I have just written a comprehensive engineering playbook below.
-Your job is to read this playbook and summarize the core strategic value and technical architecture into exactly 6 impactful presentation slides.
+You are a ${persona}. I have just written a comprehensive playbook below.
+Your job is to read this playbook and summarize its core data into exactly 6 impactful presentation slides.
 
 PLAYBOOK TEXT:
 """
@@ -16,23 +21,18 @@ Provide the result STRICTLY as a valid JSON object matching exactly this schema,
 {
   "slides": [
     {
-      "title": "Professional Architecture Header",
-      "subtitle": "Technical Component Subtitle",
+      "title": "Professional Header",
+      "subtitle": "Component Subtitle",
       "bulletPoints": [
-        "A deep, rigorous bullet point detailing an engineering standard or workflow.",
-        "Another highly detailed engineering point."
+        "A rigorous bullet point detailing a strategic or technical standard.",
+        "Another highly detailed point."
       ]
     }
   ]
 }
 
-Ensure the presentation includes 6 slides summarizing the play:
-1. Executive Summary
-2. Target State Architecture 
-3. Google Cloud Blueprint 
-4. Cognizant Engineering & Delivery 
-5. Enterprise Security & Governance 
-6. Deployment Roadmap & Technical KPIs
+Ensure the presentation strictly follows these 6 slide themes based on the context:
+${structuralSlides}
 `;
 
   return executeGeminiRequest(apiKey, prompt, true);
