@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { generateComprehensivePlaybook, extractSlidesFromPlaybook } from './utils/gemini';
+import { extractSlidesFromPlaybook } from './utils/gemini';
+import { runAutonomousArchitectLoop } from './utils/agentEngine';
 import { generateAndDownloadPPTX } from './utils/pptExport';
 
 const INDUSTRIES = [
@@ -43,6 +44,7 @@ function App() {
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const [agentLogs, setAgentLogs] = useState([]);
   
   const [playbookMarkdown, setPlaybookMarkdown] = useState(null);
   const [generatedResult, setGeneratedResult] = useState(null);
@@ -81,12 +83,15 @@ function App() {
     
     setError(null);
     setIsGenerating(true);
+    setAgentLogs([]); // Clear logs on new run
     try {
-      const markdown = await generateComprehensivePlaybook(apiKey, formData);
+      const markdown = await runAutonomousArchitectLoop(apiKey, formData, (msg) => {
+        setAgentLogs(prev => [...prev, msg]);
+      });
       setPlaybookMarkdown(markdown);
       setStep(4); // View Playbook Document
     } catch (err) {
-      setError("Playbook generation failed: " + err.message);
+      setError("Playbook autonomous engine failed: " + err.message);
     } finally {
       setIsGenerating(false);
     }
@@ -108,6 +113,7 @@ function App() {
 
   const resetFlow = () => {
     setPlaybookMarkdown(null);
+    setAgentLogs([]);
     setGeneratedResult(null);
     setStep(1);
     setFormData({
@@ -258,12 +264,37 @@ function App() {
               disabled={isGenerating}
             >
               {isGenerating ? (
-                <><div className="spinner"></div> Authoring Playbook...</>
+                <><div className="spinner"></div> Agents Iterating...</>
               ) : (
-                'Author Comprehensive Playbook'
+                'Launch Autonomous Loop'
               )}
             </button>
           </div>
+
+          {isGenerating && (
+            <div className="agent-terminal animate-fade-in" style={{
+              background: '#0a0a0a', 
+              color: '#00ff41', 
+              fontFamily: 'monospace', 
+              padding: '1.5rem', 
+              borderRadius: '8px', 
+              marginTop: '2rem', 
+              minHeight: '150px',
+              maxHeight: '300px',
+              overflowY: 'auto',
+              boxShadow: 'inset 0 0 20px rgba(0,0,0,1)'
+            }}>
+              <div style={{ borderBottom: '1px solid #333', paddingBottom: '0.5rem', marginBottom: '1rem', color: '#888' }}>
+                -- Autonomous Orchestration Engine --
+              </div>
+              {agentLogs.map((log, i) => (
+                <div key={i} style={{ marginBottom: '0.4rem', lineHeight: '1.4' }}>
+                  <span style={{ color: '#fff' }}>&gt;</span> {log}
+                </div>
+              ))}
+              <div className="pulsing-cursor" style={{ animation: 'blink 1s step-end infinite', display: 'inline-block', width: '8px', height: '15px', background: '#00ff41', marginTop: '0.5rem' }}></div>
+            </div>
+          )}
         </div>
       )}
 

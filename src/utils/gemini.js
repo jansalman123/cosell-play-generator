@@ -1,34 +1,6 @@
 /**
- * Generates an extremely detailed and comprehensive GTM Playbook in Markdown format.
- */
-export async function generateComprehensivePlaybook(apiKey, data) {
-  const prompt = `
-You are a Principal Google Cloud Architect and a Senior AI Engineering Lead at Cognizant.
-Create an exhaustive, highly technical, and architecturally rigorous Go-To-Market (GTM) Playbook document combining Google Cloud Platform (GCP) and Cognizant's engineering capabilities.
-
-This playbook addresses the following technical and business context:
-- **Target Industry:** ${data.industry}
-- **Primary Core Challenge:** ${data.painPoint}
-
-The architecture natively integrates the following GCP Offerings:
-${data.gcpOfferings.map(o => `- ${o}`).join('\n')}
-
-The solution utilizes the following Cognizant Delivery IP/Offerings:
-${data.cognizantOfferings.map(o => `- ${o}`).join('\n')}
-
-CRITICAL INSTRUCTIONS:
-1. Provide a massive, deeply detailed long-form engineering playbook. 
-2. Use professional Markdown formatting (Headers, Lists, Tables, Bold/Italics).
-3. Do NOT constraint yourself to concise slide summaries yet. Write this as a comprehensive internal 5-page consulting strategy manifesto.
-4. Detail specific architectural data flows, CI/CD pipeline topologies, security compliance standards (e.g. VPC Service Controls), enterprise MLOps lifecycles, and exact GCP service integration mechanics with Cognizant IP.
-5. Ban marketing fluff and buzzwords. The audience consists of CTOs, Enterprise Architects, and VP-level engineering leadership.
-`;
-
-  return executeGeminiRequest(apiKey, prompt, false);
-}
-
-/**
  * Summarizes a previously generated Markdown playbook into a strict JSON schema for presentation slides.
+ * This represents the "Executive Designer Agent Persona".
  */
 export async function extractSlidesFromPlaybook(apiKey, markdownText) {
   const prompt = `
@@ -68,8 +40,9 @@ Ensure the presentation includes 6 slides summarizing the play:
 
 /**
  * Shared logic to hit the Gemini endpoint.
+ * Exported so other autonomous modules and loops can stream prompts to the LLM.
  */
-async function executeGeminiRequest(apiKey, promptText, expectJson) {
+export async function executeGeminiRequest(apiKey, promptText, expectJson) {
   try {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
       method: "POST",
