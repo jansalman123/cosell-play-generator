@@ -36,6 +36,7 @@ function App() {
   
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
+    targetCompany: '',
     industry: INDUSTRIES[0],
     painPoint: '',
     gcpOfferings: [],
@@ -78,8 +79,8 @@ function App() {
   };
 
   const handleGeneratePlaybook = async () => {
-    if (formData.gcpOfferings.length === 0 || formData.cognizantOfferings.length === 0 || !formData.painPoint.trim()) {
-      setError("Please ensure you have entered a pain point and selected at least one offering from both GCP and Cognizant.");
+    if (!formData.targetCompany.trim() || formData.gcpOfferings.length === 0 || formData.cognizantOfferings.length === 0 || !formData.painPoint.trim()) {
+      setError("Please ensure you have entered a target company, pain point, and selected at least one offering from both GCP and Cognizant.");
       return;
     }
 
@@ -139,6 +140,7 @@ function App() {
     setGeneratedResult(null);
     setStep(1);
     setFormData({
+      targetCompany: '',
       industry: INDUSTRIES[0],
       painPoint: '',
       gcpOfferings: [],
@@ -199,6 +201,15 @@ function App() {
         <div className="glass-panel animate-fade-in">
           <h2>Step 1: Client Context</h2>
           <div className="input-group">
+            <label className="input-label">Target Company Name</label>
+            <input 
+              type="text"
+              placeholder="e.g., Delta Airlines, Home Depot, Netflix..."
+              value={formData.targetCompany}
+              onChange={e => setFormData({...formData, targetCompany: e.target.value})}
+            />
+          </div>
+          <div className="input-group" style={{ marginTop: '1.5rem' }}>
             <label className="input-label">Target Industry</label>
             <select 
               value={formData.industry} 
@@ -221,7 +232,7 @@ function App() {
             <button 
               className="btn btn-primary" 
               onClick={() => setStep(2)}
-              disabled={!formData.painPoint.trim()}
+              disabled={!formData.painPoint.trim() || !formData.targetCompany.trim()}
             >
               Next: Select GCP Offerings
             </button>

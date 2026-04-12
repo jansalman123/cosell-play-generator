@@ -12,6 +12,8 @@ export async function extractSlidesFromPlaybook(apiKey, markdownText, mode = 'ex
 You are a ${persona}. I have just written a comprehensive playbook below.
 Your job is to read this playbook and summarize its core data into exactly 6 impactful presentation slides.
 
+CRITICAL: Do NOT generalize the company name or the identified personas. If the playbook mentions specific target companies or named roles (e.g., 'Targeting the VP of Supply Chain at Home Depot'), you MUST retain that specific company context and naming in your slide bullets.
+
 PLAYBOOK TEXT:
 """
 ${markdownText}

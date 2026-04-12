@@ -15,18 +15,19 @@ export async function runAutonomousArchitectLoop(apiKey, data, onLog, isExecutiv
   const criticPersona = isExecutiveMode ? "Chief Marketing Officer (CMO)" : "Principal Enterprise Critic";
   
   const authorGoal = isExecutiveMode 
-    ? "Create a high-level, persuasive 5-page Executive Sales Playbook. Focus entirely on business objectives, ROI, competitive positioning, and time-to-market. Ban deep technical API specifications. Speak directly to C-Suite buyers."
-    : "Create a 5-page enterprise Integration and Implementation Architecture Playbook. Ban marketing fluff. Focus on how the systems connect, major architectural data flows, and integration boundaries. CRITICAL: Do NOT output overly granular 'garbage' details like raw terminal command lines, script blocks, precise IP CIDR ranges, or low-level configurations. Keep it structural.";
+    ? "Create a high-level, persuasive 5-page Executive Sales Playbook tailored SPECIFICALLY to the target company. Use publicly available data (including SEC filings, Semrush, market insights) to identify their real-world strategy, competitors, and pain points. You MUST identify actual executive personas (e.g., actual assumed titles from LinkedIn) to target within the company. Focus entirely on business objectives, ROI, competitive positioning, and time-to-market. Speak directly to C-Suite buyers."
+    : "Create a 5-page enterprise Integration and Implementation Architecture Playbook tailored SPECIFICALLY to the target company. Use publicly available data to understand their current tech stack and engineering culture. You MUST identify actual technical personas (e.g., specific engineering or data leadership titles from LinkedIn sources) to anchor the architecture. Ban marketing fluff. Focus on how the systems connect, major architectural data flows, and integration boundaries. CRITICAL: Do NOT output overly granular 'garbage' details like raw terminal command lines, script blocks, precise IP CIDR ranges, or low-level configurations. Keep it structural.";
 
   const criticGoal = isExecutiveMode
-    ? `Your job is to reject it if it becomes too technical, uses complex engineering jargon, or fails to highlight explicit business ROI and competitive advantages.`
-    : `Your job is to reject it if it contains marketing fluff, lacks structural integration specifics, OR if it contains overly granular details like raw terminal command lines, script blocks, or precise IP subnets. Force the author to focus strictly on high-level systems integration architecture.`;
+    ? `Your job is to reject the playbook if it uses generic placeholders instead of company-specific insights, fails to identify actual executive personas (like real-world LinkedIn titles), becomes too technical, uses complex engineering jargon, or fails to highlight explicit business ROI and competitive advantages.`
+    : `Your job is to reject the playbook if it uses generic placeholders instead of company-specific insights, fails to target actual technical/engineering personas, contains marketing fluff, lacks structural integration specifics, OR if it contains overly granular details like raw terminal command lines or precise IP subnets. Force the author to focus strictly on high-level systems integration architecture tied to the specific company.`;
 
   onLog(`[System] Launching ${authorPersona} Agent...`);
   
   // INITIAL AUTHOR RUN
   let prompt = `
 You are a ${authorPersona} at Cognizant.
+Target Company: ${data.targetCompany}
 Target Industry: ${data.industry}
 Business Core Challenge: ${data.painPoint}
 GCP Capabilities: ${data.gcpOfferings.join(', ')}
@@ -35,9 +36,10 @@ Cognizant Frameworks: ${data.cognizantOfferings.join(', ')}
 ${authorGoal}
 
 CRITICAL RULES:
-1. Do NOT hallucinate. All assertions must be purely factual.
-2. Do NOT invent fictitious case studies or fake metrics. Base all capabilities strictly on official Google Cloud and Cognizant service boundaries.
-3. You MUST use strict Markdown formatting. Every single section and subsection title MUST start with markdown hashes (e.g. "# 1. Executive Summary", "## 1.1 Competitors", "### 1.1.1 Landscape"). 
+1. Do NOT hallucinate capabilities. All solution assertions must be purely factual based on official Google Cloud and Cognizant service boundaries.
+2. SYNTHESIZE PUBLIC DATA. You must leverage your knowledge regarding the target company's SEC filings, recent news, and Semrush insights to deeply customize the playbook to their explicit situation.
+3. ACTUAL PERSONAS. You must create an explicit section identifying key target personas using LinkedIn or similar source structure (e.g., naming specific titles like 'VP of Enterprise Data', 'Chief Digital Officer' and their specific mandates). Do NOT use generic persona names like 'Persona 1'.
+4. You MUST use strict Markdown formatting. Every single section and subsection title MUST start with markdown hashes (e.g. "# 1. Executive Summary", "## 1.1 Competitors", "### 1.1.1 Landscape"). 
 Do not just use plain text numbers. Use bolding and bulleted lists heavily to make the document highly readable.
 `;
 
@@ -105,6 +107,7 @@ You must rewrite the ENTIRE markdown playbook, heavily addressing this EXACT fee
 "${criticResponse.feedback}"
 
 Here was your initial solution context:
+Target Company: ${data.targetCompany}
 Target Industry: ${data.industry}
 Pain Point: ${data.painPoint}
 GCP Offerings: ${data.gcpOfferings.join(', ')}
@@ -113,9 +116,10 @@ Cognizant Offerings: ${data.cognizantOfferings.join(', ')}
 Ensure the new output is fundamentally robust. Provide the fully updated Markdown playbook now. Do not include apologies or conversational filler.
 
 CRITICAL RULES:
-1. Do NOT hallucinate. All assertions must be purely factual.
-2. Do NOT invent fictitious case studies or fake metrics. Base all capabilities strictly on official Google Cloud and Cognizant service boundaries.
-3. You MUST use strict Markdown formatting. Every single section and subsection title MUST start with markdown hashes (e.g. "# 1. Executive Summary", "## 1.1 Themes", "### 1.1.1 Tiers"). 
+1. Do NOT hallucinate capabilities. All solution assertions must be purely factual based on official Google Cloud and Cognizant service boundaries.
+2. SYNTHESIZE PUBLIC DATA. Use public details regarding the target company's filings, news, and market insights to deeply customize the playbook.
+3. ACTUAL PERSONAS. Include named, specific personas from LinkedIn or similar structure (e.g. 'SVP of Global Supply Chain', 'Chief Data Officer').
+4. You MUST use strict Markdown formatting. Every single section and subsection title MUST start with markdown hashes (e.g. "# 1. Executive Summary", "## 1.1 Themes", "### 1.1.1 Tiers"). 
 Do not just use plain text numbers. Use bolding and bulleted lists heavily to make the document highly readable.
 `;
       draft = await executeGeminiRequest(apiKey, correctionPrompt, false);
