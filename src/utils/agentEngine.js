@@ -37,8 +37,8 @@ ${authorGoal}
 
 CRITICAL RULES:
 1. Do NOT hallucinate capabilities. All solution assertions must be purely factual based on official Google Cloud and Cognizant service boundaries.
-2. SYNTHESIZE PUBLIC DATA. You must leverage your knowledge regarding the target company's SEC filings, recent news, and Semrush insights to deeply customize the playbook to their explicit situation.
-3. ACTUAL PERSONAS. You must create an explicit section identifying key target personas using LinkedIn or similar source structure (e.g., naming specific titles like 'VP of Enterprise Data', 'Chief Digital Officer' and their specific mandates). Do NOT use generic persona names like 'Persona 1'.
+2. SYNTHESIZE PUBLIC DATA. You MUST use your native Google Search tools to crawl the target company's official public website for recent news and challenges.
+3. ACTUAL PERSONAS. You MUST use Google Search to query LinkedIn (e.g. 'site:linkedin.com/in "${data.targetCompany}" CDO' or similar relevant titles) and inject the ACTUAL real-world names and exact titles of those executives into the playbook. Do NOT use generic persona placeholders.
 4. You MUST use strict Markdown formatting. Every single section and subsection title MUST start with markdown hashes (e.g. "# 1. Executive Summary", "## 1.1 Competitors", "### 1.1.1 Landscape"). 
 Do not just use plain text numbers. Use bolding and bulleted lists heavily to make the document highly readable.
 `;
@@ -117,10 +117,9 @@ Ensure the new output is fundamentally robust. Provide the fully updated Markdow
 
 CRITICAL RULES:
 1. Do NOT hallucinate capabilities. All solution assertions must be purely factual based on official Google Cloud and Cognizant service boundaries.
-2. SYNTHESIZE PUBLIC DATA. Use public details regarding the target company's filings, news, and market insights to deeply customize the playbook.
-3. ACTUAL PERSONAS. Include named, specific personas from LinkedIn or similar structure (e.g. 'SVP of Global Supply Chain', 'Chief Data Officer').
-4. You MUST use strict Markdown formatting. Every single section and subsection title MUST start with markdown hashes (e.g. "# 1. Executive Summary", "## 1.1 Themes", "### 1.1.1 Tiers"). 
-Do not just use plain text numbers. Use bolding and bulleted lists heavily to make the document highly readable.
+2. SYNTHESIZE PUBLIC DATA. You MUST use your native Google Search tools to crawl the target company's official public website for recent news and challenges.
+3. ACTUAL PERSONAS. You MUST use Google Search to query LinkedIn (e.g. 'site:linkedin.com/in "${data.targetCompany}" relevant titles') and inject the ACTUAL real-world names and exact titles of those executives into the playbook. Do NOT use generic persona placeholders.
+4. You MUST use strict Markdown formatting. Every single section and subsection title MUST start with markdown hashes. Do not just use plain text numbers. Use bolding and bulleted lists heavily to make the document highly readable.
 `;
       draft = await executeGeminiRequest(apiKey, correctionPrompt, false);
       onLog(`[Author] Iterative rework completed. Resubmitting structure...`);
