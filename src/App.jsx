@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import 'regenerator-runtime/runtime';
+import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 import { extractSlidesFromPlaybook } from './utils/gemini';
 import { runAutonomousArchitectLoop } from './utils/agentEngine';
 import { generateAndDownloadPPTX } from './utils/pptExport';
@@ -34,6 +36,31 @@ function App() {
   const [apiKey, setApiKey] = useState(() => ENV_KEY || localStorage.getItem('gemini_api_key') || '');
   const [isConfigured, setIsConfigured] = useState(() => !!ENV_KEY || !!localStorage.getItem('gemini_api_key'));
   
+  const {
+    transcript,
+    listening,
+    resetTranscript,
+    browserSupportsSpeechRecognition
+  } = useSpeechRecognition();
+
+  useEffect(() => {
+    if (!listening && transcript) {
+      setFormData(prev => ({
+        ...prev,
+        painPoint: prev.painPoint + (prev.painPoint && transcript ? ' ' : '') + transcript
+      }));
+      resetTranscript();
+    }
+  }, [listening, transcript, resetTranscript]);
+
+  const toggleListening = () => {
+    if (listening) {
+      SpeechRecognition.stopListening();
+    } else {
+      SpeechRecognition.startListening({ continuous: true });
+    }
+  };
+
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     targetCompany: '',
@@ -219,12 +246,27 @@ function App() {
             </select>
           </div>
           <div className="input-group" style={{ marginTop: '1.5rem' }}>
-            <label className="input-label">Primary Business Pain Point</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+              <label className="input-label" style={{ margin: 0 }}>Primary Business Pain Point</label>
+              {browserSupportsSpeechRecognition ? (
+                <button 
+                  onClick={toggleListening}
+                  className={`btn ${listening ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ padding: '0.3rem 0.8rem', fontSize: '0.75rem', borderRadius: '20px', border: listening ? 'none' : '1px solid rgba(255,255,255,0.2)' }}
+                >
+                  {listening ? "⏹️ STOP DICTATING" : "🎙️ DICTATE"}
+                </button>
+              ) : (
+                <span style={{ fontSize: '0.7rem', color: '#ff4d4f' }}>Speech API Not Supported By Browser</span>
+              )}
+            </div>
             <textarea 
               rows={4}
               placeholder="e.g., Struggling to unify customer data across fragmented systems, leading to poor personalization and lost sales..."
-              value={formData.painPoint}
+              value={listening ? formData.painPoint + (formData.painPoint && transcript ? ' ' : '') + transcript : formData.painPoint}
               onChange={e => setFormData({...formData, painPoint: e.target.value})}
+              disabled={listening}
+              style={listening ? { outline: '2px solid #4285F4', background: 'rgba(66, 133, 244, 0.05)' } : {}}
             />
           </div>
           
