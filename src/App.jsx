@@ -53,11 +53,16 @@ function App() {
     }
   }, [listening, transcript, resetTranscript]);
 
-  const toggleListening = () => {
-    if (listening) {
-      SpeechRecognition.stopListening();
-    } else {
-      SpeechRecognition.startListening({ continuous: true });
+  const toggleListening = (e) => {
+    e.preventDefault();
+    try {
+      if (listening) {
+        SpeechRecognition.stopListening();
+      } else {
+        SpeechRecognition.startListening({ continuous: true });
+      }
+    } catch (err) {
+      alert("Microphone Error: " + err.message);
     }
   };
 
