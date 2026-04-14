@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const maxDuration = 60;
 
@@ -197,7 +197,7 @@ const offeringCatalog = [
 
 const SERVER_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const liveResearchCache = new Map<string, { expiresAt: number; data: ProspectData }>();
-const LIVE_RESEARCH_MODEL = "gemini-2.5-flash";
+const LIVE_RESEARCH_MODEL = "gemini-1.5-flash";
 const DISCOVERY_TIMEOUT_MS = 18000;
 const SYNTHESIS_TIMEOUT_MS = 12000;
 const ENRICHMENT_TIMEOUT_MS = 15000;
@@ -532,28 +532,30 @@ function buildLiveProspectFromDiscovery(
 }
 
 async function requestLiveProspect(
-  client: GoogleGenAI,
+  genAI: GoogleGenerativeAI,
   companyName: string
 ) {
+  const model = genAI.getGenerativeModel({
+    model: LIVE_RESEARCH_MODEL,
+    tools: [{ googleSearch: {} }] as any
+  });
+
   const discoveryResponse = await withTimeout(
-    client.models.generateContent({
-      model: LIVE_RESEARCH_MODEL,
-      contents: buildDiscoveryPrompt(companyName),
-      config: {
-        tools: [{ googleSearch: {} }],
+    model.generateContent({
+      contents: [{ role: "user", parts: [{ text: buildDiscoveryPrompt(companyName) }] }],
+      generationConfig: {
         temperature: 0.2,
-        maxOutputTokens: 900,
-        thinkingConfig: {
-          thinkingBudget: 0
-        }
+        maxOutputTokens: 900
       }
     }),
     DISCOVERY_TIMEOUT_MS,
     "Gemini source discovery"
   );
 
-  const discovery = JSON.parse(extractJsonPayload(discoveryResponse.text)) as DiscoveryPayload;
-  const groundingChunks = (discoveryResponse as any)?.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+  const discoveryText = discoveryResponse.response.text();
+  const discovery = JSON.parse(extractJsonPayload(discoveryText)) as DiscoveryPayload;
+  const groundingMetadata = (discoveryResponse.response.candidates?.[0] as any)?.groundingMetadata;
+  const groundingChunks = groundingMetadata?.groundingChunks ?? [];
   const groundedSources = groundingChunks
     .map((chunk: any) => {
       const web = chunk?.web;
@@ -568,14 +570,14 @@ async function requestLiveProspect(
     .slice(0, 8);
 
   const personaPromise = withTimeout(
-    enrichRealPersonas(client, companyName).catch(() => null),
+    enrichRealPersonas(genAI, companyName).catch(() => null),
     ENRICHMENT_TIMEOUT_MS,
     "Persona enrichment"
   ).catch(() => null);
 
   const competitorPromise = withTimeout(
     enrichRealCompetitors(
-      client,
+      genAI,
       companyName,
       `${(discovery.aiInitiatives || []).join(" ")} ${(discovery.itSpendSignals || []).join(" ")}`
     ).catch(() => null),
@@ -584,24 +586,25 @@ async function requestLiveProspect(
   ).catch(() => null);
 
   try {
+    const synthModel = genAI.getGenerativeModel({
+      model: LIVE_RESEARCH_MODEL,
+    });
+
     const synthesisResponse = await withTimeout(
-      client.models.generateContent({
-        model: LIVE_RESEARCH_MODEL,
-        contents: buildSynthesisPrompt(companyName, discovery, groundedSources),
-        config: {
+      synthModel.generateContent({
+        contents: [{ role: "user", parts: [{ text: buildSynthesisPrompt(companyName, discovery, groundedSources) }] }],
+        generationConfig: {
           responseMimeType: "application/json",
           temperature: 0.2,
-          maxOutputTokens: 2200,
-          thinkingConfig: {
-            thinkingBudget: 0
-          }
+          maxOutputTokens: 2200
         }
       }),
       SYNTHESIS_TIMEOUT_MS,
       "Gemini synthesis"
     );
 
-    const data = normalizeProspectData(companyName, JSON.parse(extractJsonObject(synthesisResponse.text)));
+    const synthesisText = synthesisResponse.response.text();
+    const data = normalizeProspectData(companyName, JSON.parse(extractJsonObject(synthesisText)));
 
     data.researchMetadata = {
       ...data.researchMetadata,
@@ -818,29 +821,39 @@ function ensureHeatmapCoverage(
 }
 
 async function enrichRealPersonas(
-  client: GoogleGenAI,
+  genAI: GoogleGenerativeAI,
   companyName: string
 ): Promise<ProspectData["personas"] | null> {
-  const response = await client.models.generateContent({
+  const model = genAI.getGenerativeModel({
     model: LIVE_RESEARCH_MODEL,
+    tools: [{ googleSearch: {} }] as any
+  });
+
+  const response = await model.generateContent({
     contents: [
-      `Find 3 to 4 real named decision-makers at ${companyName} using current public sources.`,
-      "Use only public sources such as LinkedIn public profiles, company leadership pages, speaker bios, or press releases.",
-      "Keep every string short and avoid citation markers.",
-      "Return JSON only in the shape {\"personas\":[...]} with each persona including only name, title, whyNow, profileUrl, sourceLabel, linkedinSearchQuery.",
-      "Do not return generic role placeholders. If a real person's identity is not public, omit them."
-    ].join("\n"),
-    config: {
-      tools: [{ googleSearch: {} }],
-      temperature: 0.2,
-      maxOutputTokens: 700,
-      thinkingConfig: {
-        thinkingBudget: 0
+      {
+        role: "user",
+        parts: [
+          {
+            text: [
+              `Find 3 to 4 real named decision-makers at ${companyName} using current public sources.`,
+              "Use only public sources such as LinkedIn public profiles, company leadership pages, speaker bios, or press releases.",
+              "Keep every string short and avoid citation markers.",
+              "Return JSON only in the shape {\"personas\":[...]} with each persona including only name, title, whyNow, profileUrl, sourceLabel, linkedinSearchQuery.",
+              "Do not return generic role placeholders. If a real person's identity is not public, omit them."
+            ].join("\n")
+          }
+        ]
       }
+    ],
+    generationConfig: {
+      temperature: 0.2,
+      maxOutputTokens: 700
     }
   });
 
-  const parsed = JSON.parse(extractJsonPayload(response.text)) as { personas?: unknown[] };
+  const text = response.response.text();
+  const parsed = JSON.parse(extractJsonPayload(text)) as { personas?: unknown[] };
   if (!Array.isArray(parsed.personas)) return null;
 
   const normalized = normalizeProspectData(companyName, { personas: parsed.personas }).personas;
@@ -849,31 +862,41 @@ async function enrichRealPersonas(
 }
 
 async function enrichRealCompetitors(
-  client: GoogleGenAI,
+  genAI: GoogleGenerativeAI,
   companyName: string,
   currentSummary: string
 ): Promise<ProspectData["competitors"] | null> {
   try {
-    const response = await client.models.generateContent({
+    const model = genAI.getGenerativeModel({
       model: LIVE_RESEARCH_MODEL,
+      tools: [{ googleSearch: {} }] as any
+    });
+
+    const response = await model.generateContent({
       contents: [
-        `Find 3 to 4 real competitor companies for ${companyName} based on current public market positioning.`,
-        "Use public sources only and choose actual companies, not generic benchmark labels.",
-        "Keep every string short and avoid citation markers.",
-        `Context: ${currentSummary}`,
-        "Return JSON only in the shape {\"competitors\":[...]} with each competitor including name, benchmarkSummary, pressurePoint, and cognizantAngle."
-      ].join("\n"),
-      config: {
-        tools: [{ googleSearch: {} }],
-        temperature: 0.2,
-        maxOutputTokens: 700,
-        thinkingConfig: {
-          thinkingBudget: 0
+        {
+          role: "user",
+          parts: [
+            {
+              text: [
+                `Find 3 to 4 real competitor companies for ${companyName} based on current public market positioning.`,
+                "Use public sources only and choose actual companies, not generic benchmark labels.",
+                "Keep every string short and avoid citation markers.",
+                `Context: ${currentSummary}`,
+                "Return JSON only in the shape {\"competitors\":[...]} with each competitor including name, benchmarkSummary, pressurePoint, and cognizantAngle."
+              ].join("\n")
+            }
+          ]
         }
+      ],
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 700
       }
     });
 
-    const parsed = JSON.parse(extractJsonPayload(response.text)) as { competitors?: unknown[] };
+    const text = response.response.text();
+    const parsed = JSON.parse(extractJsonPayload(text)) as { competitors?: unknown[] };
     if (Array.isArray(parsed.competitors)) {
       const normalized = normalizeProspectData(companyName, { competitors: parsed.competitors }).competitors;
       const realOnly = normalized.filter((competitor) => isRealCompetitorName(competitor.name, companyName));
@@ -883,25 +906,35 @@ async function enrichRealCompetitors(
     console.warn("Rich competitor enrichment failed, trying names-only fallback.", error);
   }
 
-  const namesResponse = await client.models.generateContent({
-    model: LIVE_RESEARCH_MODEL,
-    contents: [
-      `Find exactly 4 real competitor or peer companies for ${companyName}.`,
-      "Use public sources only.",
-      "Return JSON only in the shape {\"names\":[\"Company A\",\"Company B\",\"Company C\",\"Company D\"]}.",
-      "Use official company names only. No explanations."
-    ].join("\n"),
-    config: {
-      tools: [{ googleSearch: {} }],
-      temperature: 0.1,
-      maxOutputTokens: 180,
-      thinkingConfig: {
-        thinkingBudget: 0
-      }
-    }
-  });
+    const modelBasic = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      tools: [{ googleSearch: {} }] as any
+    });
 
-  const parsedNames = JSON.parse(extractJsonPayload(namesResponse.text)) as { names?: unknown[] };
+    const namesResponse = await modelBasic.generateContent({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: [
+                `Find exactly 4 real competitor or peer companies for ${companyName}.`,
+                "Use public sources only.",
+                "Return JSON only in the shape {\"names\":[\"Company A\",\"Company B\",\"Company C\",\"Company D\"]}.",
+                "Use official company names only. No explanations."
+              ].join("\n")
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 180
+      }
+    });
+
+    const namesText = namesResponse.response.text();
+    const parsedNames = JSON.parse(extractJsonPayload(namesText)) as { names?: string[] };
   const names = Array.isArray(parsedNames.names)
     ? parsedNames.names.map((name) => asText(name)).filter((name) => isRealCompetitorName(name, companyName))
     : [];
@@ -1577,8 +1610,8 @@ export default async function handler(req: RequestWithBody, res: ResponseWithHel
 
   try {
     const startedAt = Date.now();
-    const client = new GoogleGenAI({ apiKey });
-    const data = await requestLiveProspect(client, companyName);
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const data = await requestLiveProspect(genAI, companyName);
 
     if (hasTimeBudget(startedAt, ENRICHMENT_TIMEOUT_MS * 2)) {
       try {
