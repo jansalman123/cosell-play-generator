@@ -1,0 +1,9 @@
+{
+  "name": "Cognizant GCP Playbook",
+  "short_name": "GCP Playbook",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0c2646",
+  "theme_color": "#0c2646",
+  "description": "Account prospecting, co-sell play generation, and executive deck export for Cognizant and Google Cloud AI motions."
+}
