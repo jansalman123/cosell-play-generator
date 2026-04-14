@@ -48,8 +48,8 @@ async function startServer() {
   app.get("/api/health", (_req, res) => {
     res.json({
       status: "ok",
-      liveResearchEnabled: Boolean(process.env.GEMINI_API_KEY),
-      note: process.env.GEMINI_API_KEY
+      liveResearchEnabled: Boolean(process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY),
+      note: (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY)
         ? "Local dev is using Gemini-backed live prospecting and playbook research."
         : "Local dev is missing GEMINI_API_KEY, so prospecting and playbook generation will fall back to demo behavior."
     });
@@ -87,7 +87,7 @@ async function startServer() {
     } as const;
 
     try {
-      const data = process.env.GEMINI_API_KEY
+      const data = (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY)
         ? await createLiveResearchedPlaybook(fallbackInput)
         : createCoSellPlaybook(fallbackInput);
 

@@ -372,11 +372,15 @@ function mapAccountToDocumentInput(account: ProspectData, playbook: CoSellPlaybo
 
 export default function App() {
   const [query, setQuery] = useState("");
+  const [painPoint, setPainPoint] = useState("");
   const { transcript, listening, resetTranscript } = useSpeechRecognition();
 
   useEffect(() => {
     if (transcript) {
-      setQuery(transcript);
+      setPainPoint((prev) => {
+        // Only overwrite if currently dictating to avoid wiping manual entry.
+        return transcript;
+      });
     }
   }, [transcript]);
 
@@ -554,7 +558,7 @@ export default function App() {
     setError(null);
 
     try {
-      const data = await analyzeCompany(query.trim());
+      const data = await analyzeCompany(query.trim() + (painPoint.trim() ? ` (Pain point context: ${painPoint.trim()})` : ""));
       const existing = accounts.findIndex(
         (account) => account.companyName.toLowerCase() === data.companyName.toLowerCase()
       );
@@ -570,6 +574,7 @@ export default function App() {
       }
 
       setQuery("");
+      setPainPoint("");
       setActiveTab("brief");
     } catch (err: any) {
       setError(err.message || "Could not build the account prospect.");
@@ -775,13 +780,23 @@ export default function App() {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Snowflake, Humana, ServiceNow..."
-                  className="w-full rounded-2xl border border-line/15 bg-white pl-11 pr-32 py-4 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
+                  className="w-full rounded-2xl border border-line/15 bg-white px-11 py-4 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
+                />
+              </div>
+
+              <label className="text-[11px] font-mono uppercase tracking-[0.22em] text-ink/45">Business Pain Point (Optional)</label>
+              <div className="relative">
+                <textarea
+                  value={painPoint}
+                  onChange={(e) => setPainPoint(e.target.value)}
+                  placeholder="What specific outcome or problem are they solving?"
+                  className="w-full resize-none rounded-2xl border border-line/15 bg-white pl-4 pr-32 py-4 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 h-24"
                 />
                 <button
                   type="button"
                   onClick={toggleDictate}
                   className={cn(
-                    "absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition",
+                    "absolute right-2 top-4 flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition",
                     listening
                       ? "bg-red-50 text-red-600 hover:bg-red-100"
                       : "bg-line/5 text-ink/65 hover:bg-line/10 hover:text-ink"

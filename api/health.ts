@@ -8,6 +8,6 @@ type ResponseWithHelpers = ServerResponse & {
 export default function handler(_req: IncomingMessage, res: ResponseWithHelpers) {
   res.status(200).json({
     status: "ok",
-    liveResearchEnabled: Boolean(process.env.GEMINI_API_KEY)
+    liveResearchEnabled: Boolean(process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY)
   });
 }

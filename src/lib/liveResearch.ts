@@ -231,7 +231,7 @@ function buildResearchPrompt(input: CoSellInput): string {
 }
 
 export async function createLiveResearchedPlaybook(input: CoSellInput): Promise<CoSellPlaybook> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
     return createCoSellPlaybook(input);
   }

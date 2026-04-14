@@ -68,7 +68,7 @@ export default async function handler(req: RequestWithBody, res: ServerResponse)
   }
 
   try {
-    const data = process.env.GEMINI_API_KEY
+    const data = (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY)
       ? await createLiveResearchedPlaybook(input)
       : createCoSellPlaybook(input);
 

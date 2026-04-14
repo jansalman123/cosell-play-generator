@@ -1565,7 +1565,8 @@ export default async function handler(req: RequestWithBody, res: ResponseWithHel
     return;
   }
 
-  if (!process.env.GEMINI_API_KEY) {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+  if (!apiKey) {
     res.status(200).json({
       data: demoProspect(companyName, "No GEMINI_API_KEY is set in Vercel, so the app is using its demo fallback.")
     });
@@ -1574,7 +1575,7 @@ export default async function handler(req: RequestWithBody, res: ResponseWithHel
 
   try {
     const startedAt = Date.now();
-    const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const client = new GoogleGenAI({ apiKey });
     const data = await requestLiveProspect(client, companyName);
 
     if (hasTimeBudget(startedAt, ENRICHMENT_TIMEOUT_MS * 2)) {

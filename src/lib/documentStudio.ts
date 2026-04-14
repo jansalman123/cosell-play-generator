@@ -28,7 +28,7 @@ export interface SlideSummary {
 }
 
 async function executeGeminiRequest(promptText: string, expectJson: boolean) {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not configured.");
   }
@@ -269,7 +269,7 @@ function parseCombinedDocuments(raw: string) {
 }
 
 export async function generateDocuments(input: DocumentGenerationInput): Promise<GeneratedDocuments> {
-  if (!process.env.GEMINI_API_KEY) {
+  if (!(process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY)) {
     return {
       executiveMarkdown: buildFallbackMarkdown(input, "executive"),
       technicalMarkdown: buildFallbackMarkdown(input, "technical"),
@@ -306,7 +306,7 @@ export async function generateDocuments(input: DocumentGenerationInput): Promise
 }
 
 export async function summarizeDocumentToSlides(markdownText: string, mode: DocumentMode): Promise<SlideSummary> {
-  if (!process.env.GEMINI_API_KEY) {
+  if (!(process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY)) {
     return {
       slides: [
         {
