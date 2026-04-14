@@ -10,12 +10,18 @@ export async function generateDocuments(input: DocumentGenerationInput): Promise
   });
 
   const raw = await response.text();
-  const payload = raw ? JSON.parse(raw) : {};
-  if (!response.ok) {
-    throw new Error((payload as any).error || `Unable to generate documents. Endpoint returned ${response.status}.`);
+  let payload: any = {};
+  try {
+    payload = raw ? JSON.parse(raw) : {};
+  } catch (err) {
+    throw new Error(`Endpoint returned non-JSON (Status ${response.status}). Vercel Response: ${raw.slice(0, 150)}`);
   }
 
-  return (payload as any).data as GeneratedDocuments;
+  if (!response.ok) {
+    throw new Error(payload.error || `Unable to generate documents. Endpoint returned ${response.status}.`);
+  }
+
+  return payload.data as GeneratedDocuments;
 }
 
 export async function summarizeDocument(markdown: string, mode: DocumentMode): Promise<SlideSummary> {
@@ -28,10 +34,16 @@ export async function summarizeDocument(markdown: string, mode: DocumentMode): P
   });
 
   const raw = await response.text();
-  const payload = raw ? JSON.parse(raw) : {};
-  if (!response.ok) {
-    throw new Error((payload as any).error || `Unable to summarize document. Endpoint returned ${response.status}.`);
+  let payload: any = {};
+  try {
+    payload = raw ? JSON.parse(raw) : {};
+  } catch (err) {
+    throw new Error(`Endpoint returned non-JSON (Status ${response.status}). Vercel Response: ${raw.slice(0, 150)}`);
   }
 
-  return (payload as any).data as SlideSummary;
+  if (!response.ok) {
+    throw new Error(payload.error || `Unable to summarize document. Endpoint returned ${response.status}.`);
+  }
+
+  return payload.data as SlideSummary;
 }

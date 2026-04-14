@@ -213,13 +213,16 @@ function buildFallbackMarkdown(input: DocumentGenerationInput, mode: DocumentMod
   ].join("\n");
 }
 
-function buildCombinedDocumentsPrompt(input: DocumentGenerationInput) {
+function buildDocumentPrompt(input: DocumentGenerationInput, mode: DocumentMode) {
+  const flavor = mode === "executive"
+    ? "An executive strategy playbook for business and GTM leaders. Focus on business case, buyers, ROI, co-sell narrative, and phased next steps."
+    : "A technical architecture playbook for technical buyers and architects. Focus on target-state architecture, data/integration flows, governance, security, and delivery plan.";
+
   return `
 You are a joint Google Cloud and Cognizant field strategist.
 
-Create two polished markdown documents for this account:
-1. An executive strategy playbook for business and GTM leaders
-2. A technical architecture playbook for technical buyers and architects
+Create a polished markdown document for this account:
+${flavor}
 
 Target Company: ${input.targetCompany}
 Target Industry: ${input.industry}
@@ -234,38 +237,9 @@ ${input.sourceUrls.join("\n")}
 REQUIREMENTS:
 - Use only official Google Cloud and Cognizant capability boundaries.
 - Use Google Search grounding for company context where helpful.
-- Executive document: focus on business case, buyers, ROI, co-sell narrative, and phased next steps.
-- Technical document: focus on target-state architecture, data and integration flows, governance, security, delivery plan, and technical stakeholders.
-- Keep each document rich but concise enough to generate quickly.
+- Keep the document rich but concise enough to generate quickly.
 - Use strong markdown headings and bullets.
-
-OUTPUT FORMAT:
-Return plain text with these exact delimiters and nothing before the first one:
-<<<EXECUTIVE>>>
-[executive markdown]
-<<<TECHNICAL>>>
-[technical markdown]
 `;
-}
-
-function parseCombinedDocuments(raw: string) {
-  const execMarker = "<<<EXECUTIVE>>>";
-  const techMarker = "<<<TECHNICAL>>>";
-  const execIndex = raw.indexOf(execMarker);
-  const techIndex = raw.indexOf(techMarker);
-
-  if (execIndex === -1 || techIndex === -1 || techIndex <= execIndex) {
-    throw new Error("Combined document response was missing required section markers.");
-  }
-
-  const executiveMarkdown = raw.slice(execIndex + execMarker.length, techIndex).trim();
-  const technicalMarkdown = raw.slice(techIndex + techMarker.length).trim();
-
-  if (!executiveMarkdown || !technicalMarkdown) {
-    throw new Error("Combined document response did not include both document bodies.");
-  }
-
-  return { executiveMarkdown, technicalMarkdown };
 }
 
 export async function generateDocuments(input: DocumentGenerationInput): Promise<GeneratedDocuments> {
@@ -280,19 +254,17 @@ export async function generateDocuments(input: DocumentGenerationInput): Promise
   }
 
   try {
-    const combinedRaw = await withTimeout(
-      executeGeminiRequest(buildCombinedDocumentsPrompt(input), false),
-      18000,
-      "Document studio generation"
-    );
-    const { executiveMarkdown, technicalMarkdown } = parseCombinedDocuments(combinedRaw);
+    const [executiveMarkdown, technicalMarkdown] = await Promise.all([
+      withTimeout(executeGeminiRequest(buildDocumentPrompt(input, "executive"), false), 8000, "Exec doc generation"),
+      withTimeout(executeGeminiRequest(buildDocumentPrompt(input, "technical"), false), 8000, "Tech doc generation")
+    ]);
 
     return {
       executiveMarkdown,
       technicalMarkdown,
       generatedAt: new Date().toISOString(),
       mode: "live",
-      note: "Executive and technical documents were generated in one Gemini pass for faster turnaround."
+      note: "Executive and technical documents were generated in parallel for faster turnaround."
     };
   } catch (error) {
     return {

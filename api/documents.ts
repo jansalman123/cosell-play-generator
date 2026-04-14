@@ -45,17 +45,21 @@ function normalizeBody(body: Partial<DocumentGenerationInput> | undefined): Docu
 export default async function handler(req: RequestWithBody, res: ServerResponse) {
   const response = withHelpers(res);
 
-  if (req.method !== "POST") {
-    response.status(405).json({ error: "Method not allowed." });
-    return;
-  }
+  try {
+    if (req.method !== "POST") {
+      response.status(405).json({ error: "Method not allowed." });
+      return;
+    }
 
-  const input = normalizeBody(req.body);
-  if (!input) {
-    response.status(400).json({ error: "A valid document generation payload is required." });
-    return;
-  }
+    const input = normalizeBody(req.body);
+    if (!input) {
+      response.status(400).json({ error: "A valid document generation payload is required." });
+      return;
+    }
 
-  const data = await generateDocuments(input);
-  response.status(200).json({ data });
+    const data = await generateDocuments(input);
+    response.status(200).json({ data });
+  } catch (error: any) {
+    response.status(500).json({ error: "Server handler error: " + (error.message || String(error)) });
+  }
 }
