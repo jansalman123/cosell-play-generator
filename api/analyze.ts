@@ -1,6 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { GoogleGenAI } from "@google/genai";
 
+export const maxDuration = 60;
+export const memory = 1024;
+
 type RequestWithBody = IncomingMessage & {
   body?: {
     companyName?: string;

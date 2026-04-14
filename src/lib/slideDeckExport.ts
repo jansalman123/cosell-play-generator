@@ -35,19 +35,27 @@ function shortenText(value: string, maxLength: number) {
 
 function normalizeBullets(points: string[]) {
   return points
-    .map((point) => shortenText(point, 150))
+    .map((point) => shortenText(point, 105))
     .filter(Boolean)
-    .slice(0, 4);
+    .slice(0, 3);
 }
 
 function addHeader(slide: PptxGenJS.Slide, title: string, subtitle?: string) {
+  slide.addShape("rect", {
+    x: 0.72,
+    y: 0.44,
+    w: 0.12,
+    h: 0.62,
+    fill: { color: COLORS.blue },
+    line: { color: COLORS.blue, width: 0 }
+  });
   slide.addText(title, {
-    x: 0.7,
-    y: 0.42,
-    w: 11.4,
-    h: 0.52,
+    x: 1.0,
+    y: 0.4,
+    w: 11.2,
+    h: 0.62,
     fontFace: "Aptos Display",
-    fontSize: 24,
+    fontSize: 26,
     bold: true,
     color: COLORS.navy,
     fit: "shrink"
@@ -55,12 +63,12 @@ function addHeader(slide: PptxGenJS.Slide, title: string, subtitle?: string) {
 
   if (subtitle) {
     slide.addText(subtitle, {
-      x: 0.7,
-      y: 0.98,
-      w: 11.4,
-      h: 0.32,
+      x: 1.0,
+      y: 1.05,
+      w: 11.0,
+      h: 0.3,
       fontFace: "Aptos",
-      fontSize: 11,
+      fontSize: 10,
       color: COLORS.muted,
       fit: "shrink"
     });
@@ -69,10 +77,10 @@ function addHeader(slide: PptxGenJS.Slide, title: string, subtitle?: string) {
 
 function addBodyPanel(slide: PptxGenJS.Slide) {
   slide.addShape("roundRect", {
-    x: 0.7,
-    y: 1.42,
-    w: 11.8,
-    h: 4.95,
+    x: 0.95,
+    y: 1.55,
+    w: 11.1,
+    h: 4.55,
     rectRadius: 0.08,
     fill: { color: COLORS.panel },
     line: { color: COLORS.line, width: 1 }
@@ -86,12 +94,12 @@ function addBullets(slide: PptxGenJS.Slide, bullets: string[], startY = 1.78) {
       options: { bullet: { indent: 16 }, breakLine: true, paraSpaceAfter: 10 }
     })),
     {
-      x: 1.02,
+      x: 1.35,
       y: startY,
-      w: 11.0,
-      h: 4.25,
+      w: 10.25,
+      h: 3.95,
       fontFace: "Aptos",
-      fontSize: 16,
+      fontSize: 20,
       color: COLORS.ink,
       margin: 0,
       valign: "top",
@@ -200,15 +208,15 @@ export async function exportSlideSummaryToPptx(
 
   slidesData.slides.forEach((slideInfo) => {
     const title = shortenText(slideInfo.title || "Key Insight", 90);
-    const subtitle = slideInfo.subtitle ? shortenText(slideInfo.subtitle, 120) : undefined;
-    const bulletPages = chunk(normalizeBullets(slideInfo.bulletPoints), 4);
+    const subtitle = slideInfo.subtitle ? shortenText(slideInfo.subtitle, 90) : undefined;
+    const bulletPages = chunk(normalizeBullets(slideInfo.bulletPoints), 3);
     const pages = bulletPages.length ? bulletPages : [[]];
 
     pages.forEach((page, pageIndex) => {
       const slide = pptx.addSlide({ masterName: "CONTENT" });
       addHeader(slide, pageIndex === 0 ? title : `${title} (cont.)`, subtitle);
       addBodyPanel(slide);
-      addBullets(slide, page.length ? page : ["No additional content was returned for this section."], 1.82);
+      addBullets(slide, page.length ? page : ["No additional content was returned for this section."], 1.95);
     });
   });
 

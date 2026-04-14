@@ -2,6 +2,9 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { createCoSellPlaybook, type CoSellInput } from "../src/lib/playbook";
 import { createLiveResearchedPlaybook } from "../src/lib/liveResearch";
 
+export const maxDuration = 60;
+export const memory = 1024;
+
 type RequestWithBody = IncomingMessage & {
   body?: Partial<CoSellInput>;
 };
