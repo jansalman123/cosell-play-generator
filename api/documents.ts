@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { generateDocuments, type DocumentGenerationInput } from "../src/lib/documentStudio";
 
+export const maxDuration = 60;
+
 type RequestWithBody = IncomingMessage & {
   body?: Partial<DocumentGenerationInput>;
 };
