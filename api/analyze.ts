@@ -661,6 +661,10 @@ function cleanSearchTitle(value: string): string {
     .trim();
 }
 
+function looksIncompleteTitle(title: string): boolean {
+  return /\b(and|of|for|with|the|chief digital|chief technology)$/i.test(title.trim());
+}
+
 function extractPersonaCandidateFromSnippet(
   companyName: string,
   result: { title: string; url: string; snippet: string }
@@ -710,6 +714,7 @@ function extractPersonaCandidateFromSnippet(
 
   if (!looksLikePersonName(name)) return null;
   if (!role || role.length < 4 || role.length > 130) return null;
+  if (looksIncompleteTitle(role)) return null;
   if (!/\b(chief|cio|cto|technology|information|digital|data|ai|analytics|product|customer|operations|platform|engineering|transformation|innovation|network|security|architecture|head|president|vp|svp|evp)\b/i.test(role)) {
     return null;
   }
@@ -818,6 +823,7 @@ function extractPersonasFromProbeText(
           : parts[1];
       const why = parts.length > 2 ? parts[parts.length - 1] : "";
       if (!looksLikePersonName(name)) return null;
+      if (looksIncompleteTitle(title)) return null;
       const relevantSource =
         sources.find((source) => `${source.title} ${source.url}`.toLowerCase().includes(name.toLowerCase().split(/\s+/)[0])) ||
         sources.find((source) => source.url.toLowerCase().includes("linkedin.com")) ||
