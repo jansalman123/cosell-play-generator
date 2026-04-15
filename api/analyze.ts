@@ -200,7 +200,7 @@ const liveResearchCache = new Map<string, { expiresAt: number; data: ProspectDat
 const LIVE_RESEARCH_MODEL = "gemini-2.5-flash";
 const DISCOVERY_TIMEOUT_MS = 18000;
 const SYNTHESIS_TIMEOUT_MS = 12000;
-const ENRICHMENT_TIMEOUT_MS = 15000;
+const ENRICHMENT_TIMEOUT_MS = 22000;
 const REQUEST_TIME_BUDGET_MS = 52000;
 const HEATMAP_OFFERINGS = [
   "Cognizant Neuro AI Enterprise Core",
@@ -509,6 +509,20 @@ function buildPersonaSynthesisPrompt(
   ].join("\n");
 }
 
+function buildOfficialPersonaExtractionPrompt(
+  companyName: string,
+  pages: Array<{ url: string; excerpt: string }>
+): string {
+  return [
+    `Using only the official public page excerpts below, identify 3 to 4 real named leaders at ${companyName} who are relevant to AI, data, technology, digital, product, customer operations, or transformation decisions.`,
+    "Prefer leaders with direct accountability for technology, platform, data, product, digital, customer, or operations domains.",
+    "Do not invent names. Omit anyone not clearly supported by the page excerpts.",
+    "Return JSON only in the shape {\"personas\":[...]} with each persona including only name, title, whyNow, profileUrl, sourceLabel, linkedinSearchQuery.",
+    "sourceLabel should be Company leadership page or Investor relations bio.",
+    `Official page excerpts JSON: ${JSON.stringify(pages)}`
+  ].join("\n");
+}
+
 async function repairDiscoveryPayload(
   genAI: GoogleGenerativeAI,
   companyName: string,
@@ -599,6 +613,96 @@ function personaRelevanceScore(persona: Pick<ProspectData["personas"][number], "
   }
 
   return score;
+}
+
+function decodeDuckDuckGoHref(rawHref: string): string | null {
+  const decodedHref = rawHref.startsWith("//") ? `https:${rawHref}` : rawHref;
+  try {
+    const url = new URL(decodedHref);
+    const redirected = url.searchParams.get("uddg");
+    return redirected ? decodeURIComponent(redirected) : decodedHref;
+  } catch {
+    return null;
+  }
+}
+
+function stripHtmlToText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function searchDuckDuckGoLinks(query: string): Promise<string[]> {
+  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0"
+    }
+  });
+  if (!response.ok) return [];
+  const html = await response.text();
+  const matches = Array.from(html.matchAll(/result__a" href="([^"]+)"/g));
+  return matches
+    .map((match) => decodeDuckDuckGoHref(match[1]))
+    .filter(Boolean) as string[];
+}
+
+async function discoverOfficialPersonaPages(companyName: string): Promise<Array<{ url: string; excerpt: string }>> {
+  const queries = [
+    `${companyName} executive leadership`,
+    `${companyName} executive bios`,
+    `${companyName} chief information officer`,
+    `${companyName} chief technology officer`,
+    `${companyName} chief digital officer`,
+    `${companyName} customer operations leadership`
+  ];
+
+  const companyToken = companyName.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const candidateUrls: string[] = [];
+
+  for (const query of queries) {
+    const links = await searchDuckDuckGoLinks(query);
+    for (const link of links) {
+      if (!link) continue;
+      const normalized = link.toLowerCase();
+      const looksOfficial =
+        normalized.includes(companyToken.slice(0, Math.min(companyToken.length, 8))) ||
+        /leadership|executive|bios|officers|about|investor|governance|lead-director|leadership-team/.test(normalized);
+      if (!looksOfficial) continue;
+      if (candidateUrls.includes(link)) continue;
+      candidateUrls.push(link);
+      if (candidateUrls.length >= 6) break;
+    }
+    if (candidateUrls.length >= 6) break;
+  }
+
+  const pages: Array<{ url: string; excerpt: string }> = [];
+  for (const url of candidateUrls.slice(0, 4)) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0"
+        }
+      });
+      if (!response.ok) continue;
+      const html = await response.text();
+      const excerpt = stripHtmlToText(html).slice(0, 12000);
+      if (!excerpt) continue;
+      pages.push({ url, excerpt });
+    } catch {
+      // ignore page fetch failures
+    }
+  }
+
+  return pages;
 }
 
 function buildSynthesisPrompt(companyName: string, discovery: DiscoveryPayload, sources: ProspectData["researchMetadata"]["sources"]): string {
@@ -1059,7 +1163,42 @@ async function enrichRealPersonas(
   const realOnly = deduped
     .sort((left, right) => personaRelevanceScore(right) - personaRelevanceScore(left))
     .slice(0, 4);
-  return realOnly.length ? realOnly : null;
+  if (realOnly.length) return realOnly;
+
+  const officialPages = await discoverOfficialPersonaPages(companyName);
+  if (!officialPages.length) return null;
+
+  try {
+    const officialResponse = await withTimeout(
+      synthesisModel.generateContent({
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: buildOfficialPersonaExtractionPrompt(companyName, officialPages) }]
+          }
+        ],
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0,
+          maxOutputTokens: 900
+        }
+      }),
+      SYNTHESIS_TIMEOUT_MS,
+      "Official page persona synthesis"
+    );
+
+    const officialParsed = JSON.parse(extractJsonObject(officialResponse.response.text())) as { personas?: unknown[] };
+    if (!Array.isArray(officialParsed.personas)) return null;
+
+    const officialNormalized = normalizeProspectData(companyName, { personas: officialParsed.personas }).personas
+      .filter((persona) => !isGenericPersonaName(persona.name, companyName))
+      .filter((persona) => personaRelevanceScore(persona) >= 4)
+      .slice(0, 4);
+
+    return officialNormalized.length ? officialNormalized : null;
+  } catch {
+    return null;
+  }
 }
 
 async function enrichRealCompetitors(
