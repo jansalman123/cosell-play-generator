@@ -250,34 +250,44 @@ function buildFallbackMarkdown(input: DocumentGenerationInput, mode: DocumentMod
       ? `# ${input.targetCompany}: Joint Google Cloud + Cognizant Executive Sales Play`
       : `# ${input.targetCompany}: Technical Architecture Playbook for Google Cloud + Cognizant`;
 
-  const emphasis =
-    mode === "executive"
-      ? "business value, executive alignment, and phased co-sell activation"
-      : "target-state architecture, integration boundaries, and governed implementation sequencing";
+  const googleFit = input.gcpOfferings.length
+    ? input.gcpOfferings.map((offering) => `- ${offering}: relevant to the stated modernization and AI agenda at ${input.targetCompany}.`)
+    : ["- Google Cloud AI and data services should anchor the platform conversation."];
+  const cognizantFit = input.cognizantOfferings.length
+    ? input.cognizantOfferings.map((offering) => `- ${offering}: helps reduce delivery risk and accelerate adoption with managed transformation support.`)
+    : ["- Cognizant services should anchor execution, governance, and operating-model rollout."];
+  const sources = input.sourceUrls.length ? input.sourceUrls.map((url) => `- ${url}`) : ["- No clean official source URLs were captured for this account."];
 
   return [
     title,
     "",
-    "## 1. Situation Overview",
-    input.accountSummary,
+    "## 1. Executive Context",
+    input.accountSummary || `${input.targetCompany} presents a credible joint Google Cloud and Cognizant co-sell opportunity.`,
     "",
     "## 2. Why This Matters Now",
-    input.whyNow,
+    input.whyNow || `The account has visible pressure to turn AI ambition into measurable operating outcomes in ${input.industry}.`,
     "",
-    "## 3. Core Pain Point",
-    input.painPoint,
+    mode === "executive" ? "## 3. Business Problem to Solve" : "## 3. Architecture Problem to Solve",
+    input.painPoint || `The account needs a clearer operating model, delivery sequence, and platform handoff for AI modernization.`,
     "",
-    "## 4. Google Cloud Fit",
-    ...input.gcpOfferings.map((offering) => `- ${offering}`),
+    mode === "executive" ? "## 4. Joint Value Hypothesis" : "## 4. Target State Direction",
+    mode === "executive"
+      ? `Google Cloud provides the AI, data, and application platform foundation, while Cognizant provides the industry delivery model, governance structure, and change enablement required to land a credible first motion at ${input.targetCompany}.`
+      : `Establish Google Cloud as the governed AI and data platform layer, then use Cognizant to design integration boundaries, rollout sequencing, and production operating controls around the initial deployment scope.`,
     "",
-    "## 5. Cognizant Fit",
-    ...input.cognizantOfferings.map((offering) => `- ${offering}`),
+    "## 5. Google Cloud Fit",
+    ...googleFit,
     "",
-    "## 6. Recommended Motion",
-    `Focus this document on ${emphasis} for ${input.targetCompany} in ${input.industry}.`,
+    "## 6. Cognizant Fit",
+    ...cognizantFit,
     "",
-    "## 7. Source Set",
-    ...input.sourceUrls.map((url) => `- ${url}`)
+    mode === "executive" ? "## 7. Recommended First Motion" : "## 7. Delivery and Governance Motion",
+    mode === "executive"
+      ? `Lead with a focused executive workshop for ${input.targetCompany} that aligns on one measurable AI use case, the Google Cloud platform posture, the Cognizant delivery role, and a 90-day pilot path with named sponsors.`
+      : `Define the first implementation slice, confirm data and workflow boundaries, align security and governance controls, and build a phased plan that moves from pilot to production without platform sprawl.`,
+    "",
+    "## 8. Reference Set",
+    ...sources
   ].join("\n");
 }
 

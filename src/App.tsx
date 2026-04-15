@@ -344,6 +344,14 @@ function buildPlaybookExport(account: ProspectData, playbook: CoSellPlaybook) {
 }
 
 function mapAccountToDocumentInput(account: ProspectData, playbook: CoSellPlaybook): DocumentGenerationInput {
+  const industryLabels: Record<IndustryKey, string> = {
+    "financial-services": "Financial Services",
+    healthcare: "Healthcare",
+    retail: "Retail",
+    manufacturing: "Manufacturing",
+    communications: "Communications",
+    "cross-industry": "Cross-Industry"
+  };
   const gcpOfferings = account.productMatches
     .filter((match) => match.partner !== "Cognizant")
     .map((match) => match.product)
@@ -355,7 +363,7 @@ function mapAccountToDocumentInput(account: ProspectData, playbook: CoSellPlaybo
 
   return {
     targetCompany: account.companyName,
-    industry: account.executiveSummary.industryHypothesis,
+    industry: industryLabels[playbook.input.industry] || "Cross-Industry",
     painPoint: `${account.itSpendIntelligence.budgetPriority}. ${account.accountPlan.whitespaceHypotheses[0] || account.strategicAiInitiatives.summary}`,
     gcpOfferings: gcpOfferings.length ? gcpOfferings : playbook.portfolioMap.filter((offer) => offer.provider === "Google Cloud").map((offer) => offer.name),
     cognizantOfferings: cognizantOfferings.length
@@ -366,7 +374,10 @@ function mapAccountToDocumentInput(account: ProspectData, playbook: CoSellPlaybo
     sourceUrls: [
       ...account.researchMetadata.sources.map((source) => source.url),
       ...playbook.research.sources.map((source) => source.url)
-    ].filter(Boolean)
+    ]
+      .filter((url): url is string => Boolean(url) && !url.includes("grounding-api-redirect"))
+      .filter((url, index, list) => list.indexOf(url) === index)
+      .slice(0, 6)
   };
 }
 
