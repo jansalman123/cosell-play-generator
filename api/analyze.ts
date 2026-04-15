@@ -482,6 +482,44 @@ function buildPersonaRepairPrompt(companyName: string, rawText: string): string 
   ].join("\n");
 }
 
+function buildPersonaDiscoveryPrompt(companyName: string): string {
+  return [
+    `Find 5 real named public leaders at ${companyName} who are relevant to AI, data, technology, customer operations, digital, product, platform, or transformation decisions.`,
+    "Prefer official company leadership pages, investor relations bios, newsroom executive profiles, and conference speaker pages.",
+    "Use LinkedIn public profiles only when official sources are sparse.",
+    "Avoid board members, generic placeholders, and roles with no clear influence on technology or operating transformation.",
+    "Avoid returning the CEO or CFO unless their title directly includes digital, product, operations, technology, AI, or transformation ownership.",
+    "Return a compact bullet list only using this format per line: Name | Title | Why relevant."
+  ].join("\n");
+}
+
+function buildFocusedPersonaDiscoveryPrompt(companyName: string): string {
+  return [
+    `Find real named public leaders at ${companyName} in these role families: CIO, CTO, chief digital officer, chief data officer, chief product officer, customer operations leader, chief transformation officer, platform or AI leader.`,
+    "Prefer official company biographies, investor relations leadership pages, and newsroom executive profiles.",
+    "Use LinkedIn public profiles only if official pages do not surface enough people.",
+    "Return only concise lines in this format: Name | Title | Why relevant."
+  ].join("\n");
+}
+
+function buildPersonaSynthesisPrompt(
+  companyName: string,
+  discoveryText: string,
+  sources: ProspectData["researchMetadata"]["sources"]
+): string {
+  return [
+    `Using only the discovery notes and sources below, identify 3 to 4 real named public decision-makers at ${companyName}.`,
+    "Prioritize leaders who actually influence AI, data, platform, digital, service operations, product, or transformation choices.",
+    "Prefer official company sources over third-party pages whenever possible.",
+    "Do not invent names. Omit anyone not supported by the discovery notes or source list.",
+    "Return JSON only in the shape {\"personas\":[...]} with each persona including only name, title, whyNow, profileUrl, sourceLabel, linkedinSearchQuery.",
+    "profileUrl must be a direct public source URL from the provided source list when possible.",
+    "sourceLabel should be one of: Company leadership page, Investor relations bio, Newsroom bio, Conference speaker page, LinkedIn.",
+    `Discovery notes: ${discoveryText}`,
+    `Source list JSON: ${JSON.stringify(sources)}`
+  ].join("\n");
+}
+
 async function repairDiscoveryPayload(
   genAI: GoogleGenerativeAI,
   companyName: string,
@@ -510,7 +548,8 @@ async function repairDiscoveryPayload(
 async function repairPersonaPayload(
   genAI: GoogleGenerativeAI,
   companyName: string,
-  rawText: string
+  rawText: string,
+  sources: ProspectData["researchMetadata"]["sources"] = []
 ): Promise<{ personas?: unknown[] }> {
   const repairModel = genAI.getGenerativeModel({
     model: LIVE_RESEARCH_MODEL
@@ -518,7 +557,18 @@ async function repairPersonaPayload(
 
   const repairResponse = await withTimeout(
     repairModel.generateContent({
-      contents: [{ role: "user", parts: [{ text: buildPersonaRepairPrompt(companyName, rawText) }] }],
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: sources.length
+                ? `${buildPersonaRepairPrompt(companyName, rawText)}\nSource list JSON: ${JSON.stringify(sources)}`
+                : buildPersonaRepairPrompt(companyName, rawText)
+            }
+          ]
+        }
+      ],
       generationConfig: {
         responseMimeType: "application/json",
         temperature: 0,
@@ -530,6 +580,36 @@ async function repairPersonaPayload(
   );
 
   return JSON.parse(extractJsonObject(repairResponse.response.text())) as { personas?: unknown[] };
+}
+
+function personaRelevanceScore(persona: Pick<ProspectData["personas"][number], "title" | "buyingRole" | "function">): number {
+  const title = persona.title.toLowerCase();
+  const functionName = persona.function.toLowerCase();
+  let score = 0;
+
+  if (/\b(cio|cto|chief information officer|chief technology officer|chief digital officer|chief data officer|chief product officer|chief customer officer|chief transformation officer)\b/.test(title)) {
+    score += 5;
+  }
+  if (/\b(evp|svp|vp|president|head)\b/.test(title)) {
+    score += 2;
+  }
+  if (/\b(data|ai|technology|digital|platform|product|customer|operations|transformation|innovation|information)\b/.test(title)) {
+    score += 3;
+  }
+  if (/\b(data|ai|technology|digital|platform|product|customer|operations|transformation)\b/.test(functionName)) {
+    score += 2;
+  }
+  if (persona.buyingRole === "economic buyer" || persona.buyingRole === "technical buyer" || persona.buyingRole === "business champion") {
+    score += 1;
+  }
+  if (/\b(board|director emeritus|advisor|investor)\b/.test(title)) {
+    score -= 5;
+  }
+  if (/^(chief executive officer|ceo|chief financial officer|cfo)$/i.test(title.trim())) {
+    score -= 3;
+  }
+
+  return score;
 }
 
 function buildSynthesisPrompt(companyName: string, discovery: DiscoveryPayload, sources: ProspectData["researchMetadata"]["sources"]): string {
@@ -904,58 +984,83 @@ async function enrichRealPersonas(
   genAI: GoogleGenerativeAI,
   companyName: string
 ): Promise<ProspectData["personas"] | null> {
-  const model = genAI.getGenerativeModel({
+  const discoveryModel = genAI.getGenerativeModel({
     model: LIVE_RESEARCH_MODEL,
     tools: [{ googleSearch: {} }] as any
   });
 
-  const response = await model.generateContent({
-    contents: [
-      {
-        role: "user",
-        parts: [
-          {
-            text: [
-              `Find 3 to 4 real named decision-makers at ${companyName} using current public sources.`,
-              "Use only public sources such as LinkedIn public profiles, company leadership pages, speaker bios, or press releases.",
-              "Keep every string short and avoid citation markers.",
-              "Return JSON only in the shape {\"personas\":[...]} with each persona including only name, title, whyNow, profileUrl, sourceLabel, linkedinSearchQuery.",
-              "Do not return generic role placeholders. If a real person's identity is not public, omit them."
-            ].join("\n")
-          }
-        ]
-      }
-    ],
-    generationConfig: {
-      temperature: 0.2,
-      maxOutputTokens: 700
-    }
+  const synthesisModel = genAI.getGenerativeModel({
+    model: LIVE_RESEARCH_MODEL
   });
 
-  const text = response.response.text();
-  let parsed: { personas?: unknown[] };
-  try {
-    parsed = JSON.parse(extractJsonPayload(text)) as { personas?: unknown[] };
-  } catch {
-    parsed = await repairPersonaPayload(genAI, companyName, text);
+  async function runPersonaPass(prompt: string) {
+    const response = await discoveryModel.generateContent({
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: prompt }]
+        }
+      ],
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 700
+      }
+    });
+
+    const text = response.response.text();
+    const groundingMetadata = (response.response.candidates?.[0] as any)?.groundingMetadata;
+    const sources = ((groundingMetadata?.groundingChunks ?? []) as any[])
+      .map((chunk) => {
+        const web = chunk?.web;
+        if (!web?.uri || !web?.title) return null;
+        return {
+          title: web.title as string,
+          url: web.uri as string,
+          publisher: web.domain as string | undefined
+        };
+      })
+      .filter(Boolean)
+      .filter((source, index, list) => list.findIndex((item) => item?.url === source?.url) === index)
+      .slice(0, 10) as ProspectData["researchMetadata"]["sources"];
+
+    let parsed: { personas?: unknown[] };
+    try {
+      const synthesisResponse = await withTimeout(
+        synthesisModel.generateContent({
+          contents: [{ role: "user", parts: [{ text: buildPersonaSynthesisPrompt(companyName, text, sources) }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0,
+            maxOutputTokens: 900
+          }
+        }),
+        SYNTHESIS_TIMEOUT_MS,
+        "Persona synthesis"
+      );
+      parsed = JSON.parse(extractJsonObject(synthesisResponse.response.text())) as { personas?: unknown[] };
+    } catch {
+      parsed = await repairPersonaPayload(genAI, companyName, text, sources);
+    }
+
+    if (!Array.isArray(parsed.personas)) return [];
+
+    return normalizeProspectData(companyName, { personas: parsed.personas }).personas
+      .filter((persona) => !isGenericPersonaName(persona.name, companyName))
+      .filter((persona) => personaRelevanceScore(persona) >= 4);
   }
-  if (!Array.isArray(parsed.personas)) return null;
 
-  const normalized = normalizeProspectData(companyName, { personas: parsed.personas }).personas;
-  const realOnly = normalized.filter((persona) => !isGenericPersonaName(persona.name, companyName));
+  const broadPass = await runPersonaPass(buildPersonaDiscoveryPrompt(companyName));
+  const focusedPass = broadPass.length >= 2 ? [] : await runPersonaPass(buildFocusedPersonaDiscoveryPrompt(companyName));
+
+  const deduped = [...broadPass, ...focusedPass].filter((persona, index, list) => {
+    const key = `${persona.name.toLowerCase()}|${persona.title.toLowerCase()}`;
+    return list.findIndex((item) => `${item.name.toLowerCase()}|${item.title.toLowerCase()}` === key) === index;
+  });
+
+  const realOnly = deduped
+    .sort((left, right) => personaRelevanceScore(right) - personaRelevanceScore(left))
+    .slice(0, 4);
   return realOnly.length ? realOnly : null;
-}
-
-function buildPersonaRoleHypotheses(companyName: string): ProspectData["personas"] {
-  const defaults = normalizeProspectData(companyName, {}).personas.slice(0, 3);
-  return defaults.map((persona) => ({
-    ...persona,
-    name: persona.title,
-    title: `Public-role hypothesis for ${companyName}`,
-    profileUrl: undefined,
-    sourceLabel: "Public-role hypothesis",
-    whyNow: `Public named buyers were not confidently recovered from live sources, so this role hypothesis preserves the most likely stakeholder. ${persona.whyNow}`
-  }));
 }
 
 async function enrichRealCompetitors(
@@ -1745,7 +1850,7 @@ export default async function handler(req: RequestWithBody, res: ResponseWithHel
     }
 
     const realPersonas = data.personas.filter((persona) => !isGenericPersonaName(persona.name, companyName));
-    data.personas = realPersonas.length ? realPersonas : buildPersonaRoleHypotheses(companyName);
+    data.personas = realPersonas;
 
     if (data.competitors.some((competitor) => !isRealCompetitorName(competitor.name, companyName))) {
       data.competitors = [];
@@ -1754,7 +1859,7 @@ export default async function handler(req: RequestWithBody, res: ResponseWithHel
     if (!realPersonas.length) {
       data.researchMetadata.note = `${
         data.researchMetadata.note || "Live web research completed."
-      } Public named personas were sparse, so the app filled the Personas tab with role hypotheses instead of leaving it blank.`;
+      } No named public decision-makers were confidently verified for the Personas tab.`;
     }
 
     setServerCache(companyName, data);
