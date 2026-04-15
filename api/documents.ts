@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { generateDocuments, type DocumentGenerationInput } from "../src/lib/documentStudio.ts";
+import { generateDocuments, type DocumentGenerationInput } from "./_lib/documentStudio.ts";
 
 export const maxDuration = 60;
 

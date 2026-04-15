@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { summarizeDocumentToSlides, type DocumentMode } from "../src/lib/documentStudio.ts";
+import { summarizeDocumentToSlides, type DocumentMode } from "./_lib/documentStudio.ts";
 
 type RequestWithBody = IncomingMessage & {
   body?: {
