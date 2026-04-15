@@ -323,8 +323,8 @@ export async function generateDocuments(input: DocumentGenerationInput): Promise
 
   try {
     const [executiveMarkdown, technicalMarkdown] = await Promise.all([
-      withTimeout(executeGeminiRequest(buildDocumentPrompt(input, "executive"), false, { useSearch: true }), 8000, "Exec doc generation"),
-      withTimeout(executeGeminiRequest(buildDocumentPrompt(input, "technical"), false, { useSearch: true }), 8000, "Tech doc generation")
+      withTimeout(executeGeminiRequest(buildDocumentPrompt(input, "executive"), false, { useSearch: true }), 18000, "Exec doc generation"),
+      withTimeout(executeGeminiRequest(buildDocumentPrompt(input, "technical"), false, { useSearch: true }), 18000, "Tech doc generation")
     ]);
 
     return {
