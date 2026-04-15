@@ -665,6 +665,13 @@ function looksIncompleteTitle(title: string): boolean {
   return /\b(and|of|for|with|the|chief digital|chief technology)$/i.test(title.trim());
 }
 
+function normalizePersonaTitle(title: string): string {
+  if (/\bchief technology and ai$/i.test(title)) return `${title} Officer`;
+  if (/\bchief customer$/i.test(title)) return `${title} Officer`;
+  if (/\bchief digital$/i.test(title)) return `${title} Officer`;
+  return title;
+}
+
 function extractPersonaCandidateFromSnippet(
   companyName: string,
   result: { title: string; url: string; snippet: string }
@@ -711,7 +718,7 @@ function extractPersonaCandidateFromSnippet(
     .replace(/\s+with over.*$/i, "")
     .replace(/\s+/g, " ")
     .trim();
-  if (/\bchief technology and ai$/i.test(role)) role = `${role} Officer`;
+  role = normalizePersonaTitle(role);
 
   if (!looksLikePersonName(name)) return null;
   if (!role || role.length < 4 || role.length > 130) return null;
@@ -822,7 +829,7 @@ function extractPersonasFromProbeText(
               .replace(/\s+/g, " ")
               .trim()
           : parts[1];
-      const normalizedTitle = /\bchief technology and ai$/i.test(title) ? `${title} Officer` : title;
+      const normalizedTitle = normalizePersonaTitle(title);
       const why = parts.length > 2 ? parts[parts.length - 1] : "";
       if (!looksLikePersonName(name)) return null;
       if (looksIncompleteTitle(normalizedTitle)) return null;
