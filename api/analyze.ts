@@ -632,6 +632,167 @@ function personaRelevanceScore(persona: Pick<ProspectData["personas"][number], "
   return score;
 }
 
+function inferPersonaFunction(title: string): string {
+  const normalized = title.toLowerCase();
+  if (/\b(customer|experience|contact center|service)\b/.test(normalized)) return "Customer Operations";
+  if (/\b(data|analytics|ai|artificial intelligence)\b/.test(normalized)) return "Data and AI";
+  if (/\b(product|digital|transformation|innovation)\b/.test(normalized)) return "Digital and Product";
+  if (/\b(technology|information|cio|cto|platform|engineering|network)\b/.test(normalized)) return "Technology";
+  return "Technology";
+}
+
+function inferBuyingRole(title: string): ProspectData["personas"][number]["buyingRole"] {
+  const normalized = title.toLowerCase();
+  if (/\b(cio|chief information officer|chief digital officer|chief data officer|chief customer officer|president|evp)\b/.test(normalized)) {
+    return "economic buyer";
+  }
+  if (/\b(cto|chief technology officer|technology|platform|engineering|architecture|data|ai|analytics)\b/.test(normalized)) {
+    return "technical buyer";
+  }
+  return "business champion";
+}
+
+function cleanSearchTitle(value: string): string {
+  return value
+    .replace(/\s*\|\s*LinkedIn.*$/i, "")
+    .replace(/\s*-\s*LinkedIn.*$/i, "")
+    .replace(/\s*\.\.\.$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractPersonaCandidateFromSnippet(
+  companyName: string,
+  result: { title: string; url: string; snippet: string }
+): Pick<ProspectData["personas"][number], "name" | "title" | "profileUrl" | "sourceLabel" | "whyNow" | "linkedinSearchQuery"> | null {
+  const titleText = cleanSearchTitle(result.title);
+  const snippetText = stripHtmlToText(result.snippet);
+  const companyPattern = companyName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const patterns = [
+    new RegExp(`^([A-Z][A-Za-z.'-]+(?:\\s+[A-Z][A-Za-z.'-]+){1,4})\\s+-\\s+(.{4,120}?)(?:\\s+at\\s+${companyPattern}|\\s*,\\s*${companyPattern}|$)`, "i"),
+    new RegExp(`^(.{4,120}?)(?:\\s+at\\s+${companyPattern}|\\s*,\\s*${companyPattern})\\s+-\\s+LinkedIn$`, "i"),
+    new RegExp(`^(.{4,120}?)(?:\\s+at\\s+${companyPattern}|\\s*,\\s*${companyPattern})$`, "i")
+  ];
+
+  let name = "";
+  let role = "";
+  const firstMatch = titleText.match(patterns[0]);
+  if (firstMatch) {
+    name = firstMatch[1].trim();
+    role = firstMatch[2].trim();
+  } else {
+    const roleOnlyMatch = titleText.match(patterns[1]) || titleText.match(patterns[2]);
+    if (roleOnlyMatch) {
+      role = roleOnlyMatch[1].trim();
+      const snippetNameMatch = snippetText.match(/View\s+([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,4})['’]s profile/i);
+      if (snippetNameMatch) {
+        name = snippetNameMatch[1].trim();
+      }
+    }
+  }
+
+  if (!name) {
+    const profileName = titleText.split(" - ")[0]?.trim();
+    if (looksLikePersonName(profileName)) name = profileName;
+  }
+
+  if (!role) {
+    const experienceMatch = snippetText.match(new RegExp(`(.{4,120}?)(?:\\s+at\\s+${companyPattern}|\\s+·\\s+Experience:\\s+${companyPattern})`, "i"));
+    if (experienceMatch) role = experienceMatch[1].replace(/^Experience:\s*/i, "").trim();
+  }
+
+  role = role
+    .replace(/^Experience:\s*/i, "")
+    .replace(/\s+·.*$/g, "")
+    .replace(/\s+with over.*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!looksLikePersonName(name)) return null;
+  if (!role || role.length < 4 || role.length > 130) return null;
+  if (!/\b(chief|cio|cto|technology|information|digital|data|ai|analytics|product|customer|operations|platform|engineering|transformation|innovation|network|security|architecture|head|president|vp|svp|evp)\b/i.test(role)) {
+    return null;
+  }
+
+  const sourceLabel = result.url.toLowerCase().includes("linkedin.com") ? "LinkedIn" : sourceLabelFromProfileUrl(result.url);
+  return {
+    name,
+    title: role,
+    profileUrl: result.url,
+    sourceLabel,
+    whyNow: `${name} appears in public search results as ${role} at ${companyName}, making this a relevant stakeholder to verify for AI, cloud, data, or transformation outreach.`,
+    linkedinSearchQuery: `site:linkedin.com/in/ "${companyName}" "${name}" "${role}"`
+  };
+}
+
+function buildPersonaFromCandidate(
+  companyName: string,
+  candidate: Pick<ProspectData["personas"][number], "name" | "title" | "profileUrl" | "sourceLabel" | "whyNow" | "linkedinSearchQuery">,
+  index: number
+): ProspectData["personas"][number] {
+  const functionName = inferPersonaFunction(candidate.title);
+  const buyingRole = inferBuyingRole(candidate.title);
+  return {
+    name: candidate.name,
+    title: candidate.title,
+    profileUrl: candidate.profileUrl,
+    sourceLabel: candidate.sourceLabel,
+    function: functionName,
+    seniority: /\b(chief|cio|cto|president|evp|svp)\b/i.test(candidate.title) ? "Executive" : "Senior leader",
+    buyingRole,
+    whyNow: candidate.whyNow,
+    idealChannels: ["LinkedIn executive outreach", "account team warm intro", "targeted executive briefing"],
+    kpis:
+      functionName === "Customer Operations"
+        ? ["service cost reduction", "agent productivity", "customer experience lift"]
+        : functionName === "Data and AI"
+          ? ["AI value realization", "data governance", "model deployment velocity"]
+          : ["platform modernization", "delivery velocity", "operational resilience"],
+    objections: ["proof of business value", "integration complexity", "governance and risk"],
+    objectionHandling: ["lead with a narrow pilot", "tie outcomes to named KPIs", "show Cognizant delivery governance around Google Cloud"],
+    tailoredStrategy: `Open with ${companyName}'s public modernization and AI priorities, then connect Google Cloud platform capabilities to Cognizant's governed delivery path for ${functionName.toLowerCase()}.`,
+    likelyPriorities:
+      functionName === "Customer Operations"
+        ? ["experience modernization", "service automation", "agent assist"]
+        : functionName === "Data and AI"
+          ? ["AI governance", "data-to-AI platform scale", "measurable AI adoption"]
+          : ["cloud and platform modernization", "secure AI operations", "execution certainty"],
+    outreachAngles: [
+      "Google Cloud + Cognizant co-sell motion",
+      "90-day AI pilot with governed rollout path",
+      "business-value case tied to public priorities"
+    ],
+    linkedinSearchQuery: candidate.linkedinSearchQuery,
+    evidence: [
+      `${candidate.sourceLabel || "Public source"} result lists ${candidate.name} as ${candidate.title}.`,
+      candidate.profileUrl || `LinkedIn search result for ${candidate.name}`,
+      `Persona extracted from public search result ${index + 1}; verify current role before outreach.`
+    ]
+  };
+}
+
+function extractPersonasFromSearchSnippets(
+  companyName: string,
+  snippets: Array<{ title: string; url: string; snippet: string }>
+): ProspectData["personas"] {
+  const personas = snippets
+    .map((result, index) => {
+      const candidate = extractPersonaCandidateFromSnippet(companyName, result);
+      return candidate ? buildPersonaFromCandidate(companyName, candidate, index) : null;
+    })
+    .filter(Boolean) as ProspectData["personas"];
+
+  return personas
+    .filter((persona) => !isGenericPersonaName(persona.name, companyName))
+    .filter((persona) => personaRelevanceScore(persona) >= 4)
+    .filter((persona, index, list) => {
+      const key = persona.name.toLowerCase();
+      return list.findIndex((item) => item.name.toLowerCase() === key) === index;
+    })
+    .sort((left, right) => personaRelevanceScore(right) - personaRelevanceScore(left))
+    .slice(0, 4);
+}
+
 function decodeDuckDuckGoHref(rawHref: string): string | null {
   const decodedHref = rawHref.startsWith("//") ? `https:${rawHref}` : rawHref;
   try {
@@ -1159,6 +1320,10 @@ async function enrichRealPersonas(
   genAI: GoogleGenerativeAI,
   companyName: string
 ): Promise<ProspectData["personas"] | null> {
+  const firstPassSnippets = await discoverPublicPersonaSearchSnippets(companyName);
+  const firstPassPersonas = extractPersonasFromSearchSnippets(companyName, firstPassSnippets);
+  if (firstPassPersonas.length) return firstPassPersonas;
+
   const discoveryModel = genAI.getGenerativeModel({
     model: LIVE_RESEARCH_MODEL,
     tools: [{ googleSearch: {} }] as any
@@ -1284,6 +1449,9 @@ async function enrichRealPersonas(
 
   const publicSnippets = await discoverPublicPersonaSearchSnippets(companyName);
   if (!publicSnippets.length) return null;
+
+  const snippetExtracted = extractPersonasFromSearchSnippets(companyName, publicSnippets);
+  if (snippetExtracted.length) return snippetExtracted;
 
   try {
     const snippetResponse = await withTimeout(
