@@ -523,6 +523,21 @@ function buildOfficialPersonaExtractionPrompt(
   ].join("\n");
 }
 
+function buildSearchSnippetPersonaPrompt(
+  companyName: string,
+  snippets: Array<{ title: string; url: string; snippet: string }>
+): string {
+  return [
+    `Using only the public search results below, identify 3 to 4 real named leaders at ${companyName} who are relevant to AI, data, technology, digital, product, customer operations, or transformation decisions.`,
+    "The results may include official company pages and public LinkedIn profile snippets.",
+    "Only return people whose names and titles are clearly supported by the search result title or snippet.",
+    "Do not invent names. Omit weak or ambiguous matches.",
+    "Return JSON only in the shape {\"personas\":[...]} with each persona including only name, title, whyNow, profileUrl, sourceLabel, linkedinSearchQuery.",
+    "If the source URL is linkedin.com, set sourceLabel to LinkedIn. Otherwise use Public web or Company leadership page.",
+    `Search results JSON: ${JSON.stringify(snippets)}`
+  ].join("\n");
+}
+
 async function repairDiscoveryPayload(
   genAI: GoogleGenerativeAI,
   companyName: string,
@@ -655,6 +670,39 @@ async function searchDuckDuckGoLinks(query: string): Promise<string[]> {
     .filter(Boolean) as string[];
 }
 
+async function searchDuckDuckGoResults(
+  query: string
+): Promise<Array<{ title: string; url: string; snippet: string }>> {
+  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0"
+    }
+  });
+  if (!response.ok) return [];
+  const html = await response.text();
+
+  const results = Array.from(
+    html.matchAll(
+      /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g
+    )
+  )
+    .map((match) => {
+      const rawUrl = decodeDuckDuckGoHref(match[1]);
+      if (!rawUrl) return null;
+      const title = stripHtmlToText(match[2]);
+      const snippet = stripHtmlToText(match[3]);
+      return {
+        title,
+        url: rawUrl,
+        snippet
+      };
+    })
+    .filter(Boolean) as Array<{ title: string; url: string; snippet: string }>;
+
+  return results.slice(0, 8);
+}
+
 async function discoverOfficialPersonaPages(companyName: string): Promise<Array<{ url: string; excerpt: string }>> {
   const queries = [
     `${companyName} executive leadership`,
@@ -703,6 +751,38 @@ async function discoverOfficialPersonaPages(companyName: string): Promise<Array<
   }
 
   return pages;
+}
+
+async function discoverPublicPersonaSearchSnippets(
+  companyName: string
+): Promise<Array<{ title: string; url: string; snippet: string }>> {
+  const queries = [
+    `site:linkedin.com/in "${companyName}" chief information officer`,
+    `site:linkedin.com/in "${companyName}" chief technology officer`,
+    `site:linkedin.com/in "${companyName}" chief digital officer`,
+    `site:linkedin.com/in "${companyName}" customer operations`,
+    `${companyName} executive leadership technology digital customer operations`
+  ];
+
+  const deduped = new Map<string, { title: string; url: string; snippet: string }>();
+
+  for (const query of queries) {
+    const results = await searchDuckDuckGoResults(query);
+    for (const result of results) {
+      if (!result.title || !result.url) continue;
+      const normalized = result.url.toLowerCase();
+      const looksUseful =
+        normalized.includes("linkedin.com/in/") ||
+        /leadership|executive|about|investor|governance|officer|bio/.test(normalized);
+      if (!looksUseful) continue;
+      if (deduped.has(result.url)) continue;
+      deduped.set(result.url, result);
+      if (deduped.size >= 10) break;
+    }
+    if (deduped.size >= 10) break;
+  }
+
+  return Array.from(deduped.values());
 }
 
 function buildSynthesisPrompt(companyName: string, discovery: DiscoveryPayload, sources: ProspectData["researchMetadata"]["sources"]): string {
@@ -1166,15 +1246,50 @@ async function enrichRealPersonas(
   if (realOnly.length) return realOnly;
 
   const officialPages = await discoverOfficialPersonaPages(companyName);
-  if (!officialPages.length) return null;
+  if (officialPages.length) {
+    try {
+      const officialResponse = await withTimeout(
+        synthesisModel.generateContent({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: buildOfficialPersonaExtractionPrompt(companyName, officialPages) }]
+            }
+          ],
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0,
+            maxOutputTokens: 900
+          }
+        }),
+        SYNTHESIS_TIMEOUT_MS,
+        "Official page persona synthesis"
+      );
+
+      const officialParsed = JSON.parse(extractJsonObject(officialResponse.response.text())) as { personas?: unknown[] };
+      if (Array.isArray(officialParsed.personas)) {
+        const officialNormalized = normalizeProspectData(companyName, { personas: officialParsed.personas }).personas
+          .filter((persona) => !isGenericPersonaName(persona.name, companyName))
+          .filter((persona) => personaRelevanceScore(persona) >= 4)
+          .slice(0, 4);
+
+        if (officialNormalized.length) return officialNormalized;
+      }
+    } catch {
+      // fall through to public search snippet synthesis
+    }
+  }
+
+  const publicSnippets = await discoverPublicPersonaSearchSnippets(companyName);
+  if (!publicSnippets.length) return null;
 
   try {
-    const officialResponse = await withTimeout(
+    const snippetResponse = await withTimeout(
       synthesisModel.generateContent({
         contents: [
           {
             role: "user",
-            parts: [{ text: buildOfficialPersonaExtractionPrompt(companyName, officialPages) }]
+            parts: [{ text: buildSearchSnippetPersonaPrompt(companyName, publicSnippets) }]
           }
         ],
         generationConfig: {
@@ -1184,18 +1299,18 @@ async function enrichRealPersonas(
         }
       }),
       SYNTHESIS_TIMEOUT_MS,
-      "Official page persona synthesis"
+      "Search snippet persona synthesis"
     );
 
-    const officialParsed = JSON.parse(extractJsonObject(officialResponse.response.text())) as { personas?: unknown[] };
-    if (!Array.isArray(officialParsed.personas)) return null;
+    const snippetParsed = JSON.parse(extractJsonObject(snippetResponse.response.text())) as { personas?: unknown[] };
+    if (!Array.isArray(snippetParsed.personas)) return null;
 
-    const officialNormalized = normalizeProspectData(companyName, { personas: officialParsed.personas }).personas
+    const snippetNormalized = normalizeProspectData(companyName, { personas: snippetParsed.personas }).personas
       .filter((persona) => !isGenericPersonaName(persona.name, companyName))
       .filter((persona) => personaRelevanceScore(persona) >= 4)
       .slice(0, 4);
 
-    return officialNormalized.length ? officialNormalized : null;
+    return snippetNormalized.length ? snippetNormalized : null;
   } catch {
     return null;
   }
