@@ -807,7 +807,16 @@ function extractPersonasFromProbeText(
     .map((line, index) => {
       const parts = line.split("|").map((part) => part.trim()).filter(Boolean);
       if (parts.length < 2) return null;
-      const [name, title, why] = parts;
+      const name = parts[0];
+      const title =
+        parts.length > 3
+          ? parts
+              .slice(1, -1)
+              .join(" ")
+              .replace(/\s+/g, " ")
+              .trim()
+          : parts[1];
+      const why = parts.length > 2 ? parts[parts.length - 1] : "";
       if (!looksLikePersonName(name)) return null;
       const relevantSource =
         sources.find((source) => `${source.title} ${source.url}`.toLowerCase().includes(name.toLowerCase().split(/\s+/)[0])) ||
