@@ -27,10 +27,77 @@ export interface SlideSummary {
   }[];
 }
 
-async function executeGeminiRequest(promptText: string, expectJson: boolean) {
+function extractBalancedJsonSegment(rawText: string, openingChar: "{" | "["): string | null {
+  const closingChar = openingChar === "{" ? "}" : "]";
+  const start = rawText.indexOf(openingChar);
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < rawText.length; index += 1) {
+    const char = rawText[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+
+      if (char === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+
+    if (char === openingChar) {
+      depth += 1;
+      continue;
+    }
+
+    if (char === closingChar) {
+      depth -= 1;
+      if (depth === 0) {
+        return rawText.slice(start, index + 1).trim();
+      }
+    }
+  }
+
+  return null;
+}
+
+function extractJsonPayload(rawText: string) {
+  const candidate = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
+  return extractBalancedJsonSegment(candidate, "{") || extractBalancedJsonSegment(candidate, "[");
+}
+
+async function executeGeminiRequest(
+  promptText: string,
+  expectJson: boolean,
+  options?: { useSearch?: boolean }
+) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not configured.");
+  }
+
+  const body: Record<string, unknown> = {
+    contents: [{ parts: [{ text: promptText }] }]
+  };
+
+  if (options?.useSearch) {
+    body.tools = [{ google_search: {} }];
   }
 
   const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent", {
@@ -39,10 +106,7 @@ async function executeGeminiRequest(promptText: string, expectJson: boolean) {
       "Content-Type": "application/json",
       "x-goog-api-key": apiKey
     },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: promptText }] }],
-      tools: [{ google_search: {} }]
-    })
+    body: JSON.stringify(body)
   });
 
   const resultData = await response.json();
@@ -61,8 +125,12 @@ async function executeGeminiRequest(promptText: string, expectJson: boolean) {
     return textOut;
   }
 
-  textOut = textOut.replace(/```json/g, "").replace(/```/g, "").trim();
-  return JSON.parse(textOut);
+  const jsonPayload = extractJsonPayload(textOut);
+  if (!jsonPayload) {
+    throw new Error("Gemini did not return a complete JSON payload.");
+  }
+
+  return JSON.parse(jsonPayload);
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
@@ -118,7 +186,7 @@ CRITICAL RULES:
 5. Keep the output rich, specific, and useful for a seller preparing a real account meeting.
 `;
 
-  draft = await executeGeminiRequest(prompt, false);
+  draft = await executeGeminiRequest(prompt, false, { useSearch: true });
 
   while (loopCount < MAX_LOOPS && !isApproved) {
     loopCount += 1;
@@ -169,7 +237,7 @@ Why Now: ${input.whyNow}
 
 Preserve specificity, named titles, partner fit, and official capability boundaries.
 `;
-      draft = await executeGeminiRequest(correctionPrompt, false);
+      draft = await executeGeminiRequest(correctionPrompt, false, { useSearch: true });
     }
   }
 
@@ -255,8 +323,8 @@ export async function generateDocuments(input: DocumentGenerationInput): Promise
 
   try {
     const [executiveMarkdown, technicalMarkdown] = await Promise.all([
-      withTimeout(executeGeminiRequest(buildDocumentPrompt(input, "executive"), false), 8000, "Exec doc generation"),
-      withTimeout(executeGeminiRequest(buildDocumentPrompt(input, "technical"), false), 8000, "Tech doc generation")
+      withTimeout(executeGeminiRequest(buildDocumentPrompt(input, "executive"), false, { useSearch: true }), 8000, "Exec doc generation"),
+      withTimeout(executeGeminiRequest(buildDocumentPrompt(input, "technical"), false, { useSearch: true }), 8000, "Tech doc generation")
     ]);
 
     return {

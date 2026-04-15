@@ -470,6 +470,18 @@ function buildDiscoveryRepairPrompt(companyName: string, rawDiscoveryText: strin
   ].join("\n");
 }
 
+function buildPersonaRepairPrompt(companyName: string, rawText: string): string {
+  return [
+    `Normalize this malformed persona discovery output for ${companyName}.`,
+    "Return one valid JSON object only.",
+    "Do not add markdown fences or commentary.",
+    "Use the exact shape {\"personas\":[...]} and include only name, title, whyNow, profileUrl, sourceLabel, linkedinSearchQuery.",
+    "Keep only real named people when possible. If a name is clearly truncated, reconstruct it conservatively from the text.",
+    "If a persona cannot be recovered confidently, omit it.",
+    `Malformed persona discovery text: ${rawText}`
+  ].join("\n");
+}
+
 async function repairDiscoveryPayload(
   genAI: GoogleGenerativeAI,
   companyName: string,
@@ -493,6 +505,31 @@ async function repairDiscoveryPayload(
   );
 
   return JSON.parse(extractJsonObject(repairResponse.response.text())) as DiscoveryPayload;
+}
+
+async function repairPersonaPayload(
+  genAI: GoogleGenerativeAI,
+  companyName: string,
+  rawText: string
+): Promise<{ personas?: unknown[] }> {
+  const repairModel = genAI.getGenerativeModel({
+    model: LIVE_RESEARCH_MODEL
+  });
+
+  const repairResponse = await withTimeout(
+    repairModel.generateContent({
+      contents: [{ role: "user", parts: [{ text: buildPersonaRepairPrompt(companyName, rawText) }] }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0,
+        maxOutputTokens: 700
+      }
+    }),
+    SYNTHESIS_TIMEOUT_MS,
+    "Gemini persona repair"
+  );
+
+  return JSON.parse(extractJsonObject(repairResponse.response.text())) as { personas?: unknown[] };
 }
 
 function buildSynthesisPrompt(companyName: string, discovery: DiscoveryPayload, sources: ProspectData["researchMetadata"]["sources"]): string {
@@ -896,12 +933,29 @@ async function enrichRealPersonas(
   });
 
   const text = response.response.text();
-  const parsed = JSON.parse(extractJsonPayload(text)) as { personas?: unknown[] };
+  let parsed: { personas?: unknown[] };
+  try {
+    parsed = JSON.parse(extractJsonPayload(text)) as { personas?: unknown[] };
+  } catch {
+    parsed = await repairPersonaPayload(genAI, companyName, text);
+  }
   if (!Array.isArray(parsed.personas)) return null;
 
   const normalized = normalizeProspectData(companyName, { personas: parsed.personas }).personas;
   const realOnly = normalized.filter((persona) => !isGenericPersonaName(persona.name, companyName));
   return realOnly.length ? realOnly : null;
+}
+
+function buildPersonaRoleHypotheses(companyName: string): ProspectData["personas"] {
+  const defaults = normalizeProspectData(companyName, {}).personas.slice(0, 3);
+  return defaults.map((persona) => ({
+    ...persona,
+    name: persona.title,
+    title: `Public-role hypothesis for ${companyName}`,
+    profileUrl: undefined,
+    sourceLabel: "Public-role hypothesis",
+    whyNow: `Public named buyers were not confidently recovered from live sources, so this role hypothesis preserves the most likely stakeholder. ${persona.whyNow}`
+  }));
 }
 
 async function enrichRealCompetitors(
@@ -1690,12 +1744,17 @@ export default async function handler(req: RequestWithBody, res: ResponseWithHel
       }
     }
 
-    if (data.personas.some((persona) => isGenericPersonaName(persona.name, companyName))) {
-      data.personas = [];
-    }
+    const realPersonas = data.personas.filter((persona) => !isGenericPersonaName(persona.name, companyName));
+    data.personas = realPersonas.length ? realPersonas : buildPersonaRoleHypotheses(companyName);
 
     if (data.competitors.some((competitor) => !isRealCompetitorName(competitor.name, companyName))) {
       data.competitors = [];
+    }
+
+    if (!realPersonas.length) {
+      data.researchMetadata.note = `${
+        data.researchMetadata.note || "Live web research completed."
+      } Public named personas were sparse, so the app filled the Personas tab with role hypotheses instead of leaving it blank.`;
     }
 
     setServerCache(companyName, data);

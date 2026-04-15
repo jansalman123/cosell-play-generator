@@ -1204,8 +1204,8 @@ function PersonasTab({
     return (
       <Panel title="Persona strategy" icon={Users}>
         <div className="rounded-[24px] border border-dashed border-line/15 bg-[#faf9f6] p-6 text-sm leading-relaxed text-ink/62">
-          Live persona discovery is still being repaired for this account. Refresh live research once more, and the app
-          will replace placeholder titles with named public decision-makers when they are available.
+          No persona research is available yet for this account. Refresh live research to pull named public decision-makers
+          or role-based stakeholder hypotheses into the workspace.
         </div>
       </Panel>
     );
@@ -1215,10 +1215,17 @@ function PersonasTab({
     <div className="space-y-4">
       {account.personas.map((persona, index) => (
         <div key={`${persona.name}-${persona.title}-${index}`} className="grid gap-4 rounded-[28px] border border-line/10 bg-white p-5 xl:grid-cols-[340px_minmax(0,1fr)]">
+          {(() => {
+            const isHypothesis = persona.sourceLabel === "Public-role hypothesis";
+            const displayName = isHypothesis ? persona.name : persona.name;
+            const displayTitle = isHypothesis ? `${persona.function} stakeholder hypothesis` : persona.title;
+
+            return (
+              <>
           <div className="rounded-[24px] bg-[#0c2646] p-5 text-white">
             <p className="text-[11px] uppercase tracking-[0.22em] text-white/55">{persona.buyingRole}</p>
-            <h3 className="mt-3 font-serif text-3xl italic leading-tight">{persona.name}</h3>
-            <p className="mt-2 text-base text-white/82">{persona.title}</p>
+            <h3 className="mt-3 font-serif text-3xl italic leading-tight">{displayName}</h3>
+            <p className="mt-2 text-base text-white/82">{displayTitle}</p>
             <p className="mt-1 text-sm text-white/70">{persona.function} • {persona.seniority}</p>
             <div className="mt-6 space-y-3 text-sm text-white/78">
               <div>
@@ -1278,6 +1285,9 @@ function PersonasTab({
               <InfoListCard title="Outreach angles" items={persona.outreachAngles} icon={Lightbulb} />
             </div>
           </div>
+              </>
+            );
+          })()}
         </div>
       ))}
       <div className="rounded-[28px] border border-line/10 bg-[#faf9f6] p-5">
@@ -1292,8 +1302,9 @@ function PersonasTab({
           </button>
         </div>
         <p className="mt-3 text-sm leading-relaxed text-ink/65">
-          Persona cards now prioritize named people from public sources when available. Keep collection compliant with
-          public-data and approved workflow rules rather than scraping private profile data directly.
+          Persona cards prioritize named people from public sources when available and fall back to role-based stakeholder
+          hypotheses when live public identity signals are too sparse. Keep collection compliant with public-data and
+          approved workflow rules rather than scraping private profile data directly.
         </p>
       </div>
     </div>
