@@ -482,24 +482,13 @@ function buildPersonaRepairPrompt(companyName: string, rawText: string): string 
   ].join("\n");
 }
 
-function buildPersonaDiscoveryPrompt(companyName: string): string {
+function buildPersonaRoleProbePrompts(companyName: string): string[] {
   return [
-    `Find 5 real named public leaders at ${companyName} who are relevant to AI, data, technology, customer operations, digital, product, platform, or transformation decisions.`,
-    "Prefer official company leadership pages, investor relations bios, newsroom executive profiles, and conference speaker pages.",
-    "Use LinkedIn public profiles only when official sources are sparse.",
-    "Avoid board members, generic placeholders, and roles with no clear influence on technology or operating transformation.",
-    "Avoid returning the CEO or CFO unless their title directly includes digital, product, operations, technology, AI, or transformation ownership.",
-    "Return a compact bullet list only using this format per line: Name | Title | Why relevant."
-  ].join("\n");
-}
-
-function buildFocusedPersonaDiscoveryPrompt(companyName: string): string {
-  return [
-    `Find real named public leaders at ${companyName} in these role families: CIO, CTO, chief digital officer, chief data officer, chief product officer, customer operations leader, chief transformation officer, platform or AI leader.`,
-    "Prefer official company biographies, investor relations leadership pages, and newsroom executive profiles.",
-    "Use LinkedIn public profiles only if official pages do not surface enough people.",
-    "Return only concise lines in this format: Name | Title | Why relevant."
-  ].join("\n");
+    `For ${companyName}, identify the current named public executive who most closely matches this role family: Chief Information Officer, enterprise technology leader, or infrastructure/platform executive. Use official company or public executive sources. Respond with one line only in this format: Name | Exact Title | Why relevant. If no clear public match exists, respond NONE.`,
+    `For ${companyName}, identify the current named public executive who most closely matches this role family: Chief Technology Officer, network/platform engineering leader, or technology architecture executive. Use official company or public executive sources. Respond with one line only in this format: Name | Exact Title | Why relevant. If no clear public match exists, respond NONE.`,
+    `For ${companyName}, identify the current named public executive who most closely matches this role family: Chief Digital Officer, Chief Product Officer, Chief Data Officer, Chief AI Officer, or digital/data/product transformation leader. Use official company or public executive sources. Respond with one line only in this format: Name | Exact Title | Why relevant. If no clear public match exists, respond NONE.`,
+    `For ${companyName}, identify the current named public executive who most closely matches this role family: customer operations, customer service, consumer operations, business transformation, or operational excellence leader. Use official company or public executive sources. Respond with one line only in this format: Name | Exact Title | Why relevant. If no clear public match exists, respond NONE.`
+  ];
 }
 
 function buildPersonaSynthesisPrompt(
@@ -993,66 +982,76 @@ async function enrichRealPersonas(
     model: LIVE_RESEARCH_MODEL
   });
 
-  async function runPersonaPass(prompt: string) {
-    const response = await discoveryModel.generateContent({
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: prompt }]
+  const probeResults = await Promise.all(
+    buildPersonaRoleProbePrompts(companyName).map(async (prompt) => {
+      const response = await discoveryModel.generateContent({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 220
         }
-      ],
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 700
+      });
+
+      const text = response.response.text().trim();
+      const groundingMetadata = (response.response.candidates?.[0] as any)?.groundingMetadata;
+      const sources = ((groundingMetadata?.groundingChunks ?? []) as any[])
+        .map((chunk) => {
+          const web = chunk?.web;
+          if (!web?.uri || !web?.title) return null;
+          return {
+            title: web.title as string,
+            url: web.uri as string,
+            publisher: web.domain as string | undefined
+          };
+        })
+        .filter(Boolean) as ProspectData["researchMetadata"]["sources"];
+
+      return { text, sources };
+    })
+  );
+
+  const discoveryText = probeResults
+    .map((result) => result.text)
+    .filter((text) => text && !/^none$/i.test(text))
+    .join("\n");
+
+  const sourceMap = new Map<string, ProspectData["researchMetadata"]["sources"][number]>();
+  for (const result of probeResults) {
+    for (const source of result.sources) {
+      if (source?.url && !sourceMap.has(source.url)) {
+        sourceMap.set(source.url, source);
       }
-    });
-
-    const text = response.response.text();
-    const groundingMetadata = (response.response.candidates?.[0] as any)?.groundingMetadata;
-    const sources = ((groundingMetadata?.groundingChunks ?? []) as any[])
-      .map((chunk) => {
-        const web = chunk?.web;
-        if (!web?.uri || !web?.title) return null;
-        return {
-          title: web.title as string,
-          url: web.uri as string,
-          publisher: web.domain as string | undefined
-        };
-      })
-      .filter(Boolean)
-      .filter((source, index, list) => list.findIndex((item) => item?.url === source?.url) === index)
-      .slice(0, 10) as ProspectData["researchMetadata"]["sources"];
-
-    let parsed: { personas?: unknown[] };
-    try {
-      const synthesisResponse = await withTimeout(
-        synthesisModel.generateContent({
-          contents: [{ role: "user", parts: [{ text: buildPersonaSynthesisPrompt(companyName, text, sources) }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0,
-            maxOutputTokens: 900
-          }
-        }),
-        SYNTHESIS_TIMEOUT_MS,
-        "Persona synthesis"
-      );
-      parsed = JSON.parse(extractJsonObject(synthesisResponse.response.text())) as { personas?: unknown[] };
-    } catch {
-      parsed = await repairPersonaPayload(genAI, companyName, text, sources);
     }
+  }
+  const sources = Array.from(sourceMap.values()).slice(0, 12);
 
-    if (!Array.isArray(parsed.personas)) return [];
+  if (!discoveryText.trim()) return null;
 
-    return normalizeProspectData(companyName, { personas: parsed.personas }).personas
-      .filter((persona) => !isGenericPersonaName(persona.name, companyName))
-      .filter((persona) => personaRelevanceScore(persona) >= 4);
+  let parsed: { personas?: unknown[] };
+  try {
+    const synthesisResponse = await withTimeout(
+      synthesisModel.generateContent({
+        contents: [{ role: "user", parts: [{ text: buildPersonaSynthesisPrompt(companyName, discoveryText, sources) }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0,
+          maxOutputTokens: 900
+        }
+      }),
+      SYNTHESIS_TIMEOUT_MS,
+      "Persona synthesis"
+    );
+    parsed = JSON.parse(extractJsonObject(synthesisResponse.response.text())) as { personas?: unknown[] };
+  } catch {
+    parsed = await repairPersonaPayload(genAI, companyName, discoveryText, sources);
   }
 
-  const broadPass = await runPersonaPass(buildPersonaDiscoveryPrompt(companyName));
-  const focusedPass = broadPass.length >= 2 ? [] : await runPersonaPass(buildFocusedPersonaDiscoveryPrompt(companyName));
+  if (!Array.isArray(parsed.personas)) return null;
 
-  const deduped = [...broadPass, ...focusedPass].filter((persona, index, list) => {
+  const deduped = normalizeProspectData(companyName, { personas: parsed.personas }).personas
+    .filter((persona) => !isGenericPersonaName(persona.name, companyName))
+    .filter((persona) => personaRelevanceScore(persona) >= 4)
+    .filter((persona, index, list) => {
     const key = `${persona.name.toLowerCase()}|${persona.title.toLowerCase()}`;
     return list.findIndex((item) => `${item.name.toLowerCase()}|${item.title.toLowerCase()}` === key) === index;
   });
