@@ -197,7 +197,7 @@ const offeringCatalog = [
 
 const SERVER_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const liveResearchCache = new Map<string, { expiresAt: number; data: ProspectData }>();
-const LIVE_RESEARCH_MODEL = "gemini-1.5-flash";
+const LIVE_RESEARCH_MODEL = "gemini-2.5-flash";
 const DISCOVERY_TIMEOUT_MS = 18000;
 const SYNTHESIS_TIMEOUT_MS = 12000;
 const ENRICHMENT_TIMEOUT_MS = 15000;
@@ -907,7 +907,7 @@ async function enrichRealCompetitors(
   }
 
     const modelBasic = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: LIVE_RESEARCH_MODEL,
       tools: [{ googleSearch: {} }] as any
     });
 

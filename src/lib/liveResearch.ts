@@ -1,6 +1,6 @@
 import { createCoSellPlaybook, type CoSellInput, type CoSellPlaybook, type ResearchSource } from "./playbook";
 
-const LIVE_MODEL = "gemini-1.5-flash";
+const LIVE_MODEL = "gemini-2.5-flash";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 type LiveResearchPayload = {
