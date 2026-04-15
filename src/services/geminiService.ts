@@ -2,7 +2,7 @@ import type { ProspectData } from "../lib/prospect";
 
 export type { ProspectData } from "../lib/prospect";
 
-const CLIENT_CACHE_PREFIX = "prospector_live_cache:v5-persistence-heatmap:";
+const CLIENT_CACHE_PREFIX = "prospector_live_cache:v6-persona-verification:";
 const CLIENT_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
 function normalizeCompanyName(companyName: string): string {
@@ -39,6 +39,7 @@ function hasGenericCompetitorNames(data: ProspectData): boolean {
 function hasReusableLiveQuality(data: ProspectData): boolean {
   return (
     data.researchMetadata.mode === "live" &&
+    data.personas.length > 0 &&
     !hasGenericPersonaNames(data) &&
     !hasGenericCompetitorNames(data)
   );

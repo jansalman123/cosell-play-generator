@@ -318,9 +318,10 @@ function getServerCache(companyName: string): ProspectData | null {
       note: "Returned from cached live research to reduce repeated API usage."
     }
   };
+  const hasNoPersonas = data.personas.length === 0;
   const hasGenericPersonas = data.personas.some((persona) => isGenericPersonaName(persona.name, companyName));
   const hasGenericCompetitors = data.competitors.some((competitor) => !isRealCompetitorName(competitor.name, companyName));
-  if (hasGenericPersonas || hasGenericCompetitors) {
+  if (hasNoPersonas || hasGenericPersonas || hasGenericCompetitors) {
     liveResearchCache.delete(key);
     return null;
   }
@@ -330,6 +331,7 @@ function getServerCache(companyName: string): ProspectData | null {
 
 function setServerCache(companyName: string, data: ProspectData) {
   if (data.researchMetadata.mode !== "live") return;
+  if (!data.personas.length) return;
   if (data.personas.some((persona) => isGenericPersonaName(persona.name, companyName))) return;
   if (data.competitors.some((competitor) => !isRealCompetitorName(competitor.name, companyName))) return;
 

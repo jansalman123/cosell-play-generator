@@ -1200,6 +1200,49 @@ function SignalsTab({ account }: { account: ProspectData }) {
   );
 }
 
+function buildLinkedInPersonaSearches(account: ProspectData) {
+  const company = account.companyName.trim();
+  const publicCompany = `"${company}"`;
+  const targets = [
+    {
+      label: "CIO / enterprise technology owner",
+      query: `${company} chief information officer CIO`,
+      publicQuery: `site:linkedin.com/in/ ${publicCompany} "chief information officer" OR CIO`,
+      why: "Likely owns enterprise architecture, AI platform adoption, cloud modernization, and governed delivery risk."
+    },
+    {
+      label: "Chief Data / AI leader",
+      query: `${company} chief data officer chief ai officer analytics`,
+      publicQuery: `site:linkedin.com/in/ ${publicCompany} "chief data officer" OR "chief AI officer" OR analytics`,
+      why: "Usually accountable for AI strategy, data modernization, model governance, and measurable AI business outcomes."
+    },
+    {
+      label: "Digital / transformation executive",
+      query: `${company} chief digital officer transformation technology`,
+      publicQuery: `site:linkedin.com/in/ ${publicCompany} "digital transformation" executive`,
+      why: "Often sponsors cross-functional modernization programs and translates technology capability into operating-model change."
+    },
+    {
+      label: "Customer operations / CX leader",
+      query: `${company} customer operations customer experience contact center leader`,
+      publicQuery: `site:linkedin.com/in/ ${publicCompany} "customer operations" OR "customer experience" OR "contact center"`,
+      why: "Best fit for Customer Engagement Suite, Gemini-assisted service operations, agent assist, and experience-cost improvement plays."
+    },
+    {
+      label: "Shared services / process automation leader",
+      query: `${company} shared services process automation operations executive`,
+      publicQuery: `site:linkedin.com/in/ ${publicCompany} "shared services" OR "process automation" OR operations executive`,
+      why: "Strong entry point for Document AI, workflow automation, Flowsource, and Neuro AI process orchestration motions."
+    }
+  ];
+
+  return targets.map((target) => ({
+    ...target,
+    linkedinUrl: `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(target.query)}`,
+    publicSearchUrl: `https://www.google.com/search?q=${encodeURIComponent(target.publicQuery)}`
+  }));
+}
+
 function PersonasTab({
   account,
   copiedId,
@@ -1212,12 +1255,62 @@ function PersonasTab({
   updatePersonaEmail: (personaIndex: number, value: string) => void;
 }) {
   if (!account.personas.length) {
+    const searches = buildLinkedInPersonaSearches(account);
+    const searchText = searches
+      .map((search) => `${search.label}\nLinkedIn: ${search.linkedinUrl}\nPublic web check: ${search.publicSearchUrl}\nWhy: ${search.why}`)
+      .join("\n\n");
+
     return (
       <Panel title="Persona strategy" icon={Users}>
-        <div className="rounded-[24px] border border-dashed border-line/15 bg-[#faf9f6] p-6 text-sm leading-relaxed text-ink/62">
-          Named public decision-makers could not be verified for this account from the current public sources. The rest of
-          the account strategy is still usable, but the Personas tab will stay empty until stronger public leadership
-          signals are found.
+        <div className="rounded-[28px] border border-line/10 bg-[#f8fbff] p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-[11px] font-mono uppercase tracking-[0.22em] text-ink/45">LinkedIn verification queue</p>
+              <h3 className="mt-3 text-2xl font-semibold text-ink">Find the real decision-makers for {account.companyName}</h3>
+              <p className="mt-3 max-w-3xl text-sm leading-relaxed text-ink/65">
+                Live research did not return a confidently verified named buyer yet, so the app is giving you targeted
+                LinkedIn searches instead of inventing generic personas. Use these to identify real public leaders, then
+                refresh live research or add the names into your working notes before generating outreach.
+              </p>
+            </div>
+            <button
+              onClick={() => copy(searchText, "linkedin-persona-searches")}
+              className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-ink px-4 py-3 text-sm font-medium text-white transition hover:bg-accent"
+            >
+              {copiedId === "linkedin-persona-searches" ? <Check className="size-4 text-green-300" /> : <Copy className="size-4" />}
+              Copy searches
+            </button>
+          </div>
+
+          <div className="mt-6 grid gap-4 xl:grid-cols-2">
+            {searches.map((search) => (
+              <div key={search.label} className="rounded-[24px] border border-line/10 bg-white p-5 shadow-sm shadow-ink/5">
+                <p className="text-[11px] font-mono uppercase tracking-[0.18em] text-accent">Target persona</p>
+                <h4 className="mt-3 text-lg font-semibold text-ink">{search.label}</h4>
+                <p className="mt-3 text-sm leading-relaxed text-ink/65">{search.why}</p>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <a
+                    href={search.linkedinUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-[#0a66c2]/20 bg-[#eef6ff] px-4 py-2 text-sm font-medium text-[#0a66c2] transition hover:bg-[#dff0ff]"
+                  >
+                    Open LinkedIn search
+                    <ExternalLink className="size-4" />
+                  </a>
+                  <a
+                    href={search.publicSearchUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-line/10 bg-[#faf9f6] px-4 py-2 text-sm font-medium text-ink/65 transition hover:text-accent"
+                  >
+                    Public web check
+                    <ExternalLink className="size-4" />
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </Panel>
     );
