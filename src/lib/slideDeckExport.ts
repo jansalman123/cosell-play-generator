@@ -35,9 +35,9 @@ function shortenText(value: string, maxLength: number) {
 
 function normalizeBullets(points: string[]) {
   return points
-    .map((point) => shortenText(point, 105))
+    .map((point) => shortenText(point, 150))
     .filter(Boolean)
-    .slice(0, 3);
+    .slice(0, 5);
 }
 
 function addHeader(slide: PptxGenJS.Slide, title: string, subtitle?: string) {
@@ -91,15 +91,15 @@ function addBullets(slide: PptxGenJS.Slide, bullets: string[], startY = 1.78) {
   slide.addText(
     bullets.map((bullet) => ({
       text: bullet,
-      options: { bullet: { indent: 16 }, breakLine: true, paraSpaceAfter: 10 }
+      options: { bullet: { indent: 16 }, breakLine: true, paraSpaceAfter: 8 }
     })),
     {
       x: 1.35,
       y: startY,
       w: 10.25,
-      h: 3.95,
+      h: 4.35,
       fontFace: "Aptos",
-      fontSize: 20,
+      fontSize: 16,
       color: COLORS.ink,
       margin: 0,
       valign: "top",
@@ -209,7 +209,7 @@ export async function exportSlideSummaryToPptx(
   slidesData.slides.forEach((slideInfo) => {
     const title = shortenText(slideInfo.title || "Key Insight", 90);
     const subtitle = slideInfo.subtitle ? shortenText(slideInfo.subtitle, 90) : undefined;
-    const bulletPages = chunk(normalizeBullets(slideInfo.bulletPoints), 3);
+    const bulletPages = chunk(normalizeBullets(slideInfo.bulletPoints), 4);
     const pages = bulletPages.length ? bulletPages : [[]];
 
     pages.forEach((page, pageIndex) => {

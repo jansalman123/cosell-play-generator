@@ -1215,8 +1215,9 @@ function PersonasTab({
     return (
       <Panel title="Persona strategy" icon={Users}>
         <div className="rounded-[24px] border border-dashed border-line/15 bg-[#faf9f6] p-6 text-sm leading-relaxed text-ink/62">
-          No persona research is available yet for this account. Refresh live research to pull named public decision-makers
-          or role-based stakeholder hypotheses into the workspace.
+          Named public decision-makers could not be verified for this account from the current public sources. The rest of
+          the account strategy is still usable, but the Personas tab will stay empty until stronger public leadership
+          signals are found.
         </div>
       </Panel>
     );

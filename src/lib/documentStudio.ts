@@ -358,29 +358,51 @@ export async function generateDocuments(input: DocumentGenerationInput): Promise
 export async function summarizeDocumentToSlides(markdownText: string, mode: DocumentMode): Promise<SlideSummary> {
   if (!(process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY)) {
     return {
-      slides: [
-        {
-          title: mode === "executive" ? "Executive Summary" : "Architecture Summary",
-          subtitle: "Fallback slide summary",
-          bulletPoints: markdownText
-            .split("\n")
-            .filter((line) => line.trim().startsWith("-") || line.trim().startsWith("##"))
-            .slice(0, 6)
-            .map((line) => line.replace(/^[-#\s]+/, ""))
-        }
-      ]
+      slides: markdownText
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .reduce<Array<{ title: string; subtitle?: string; bulletPoints: string[] }>>((slides, line) => {
+          if (line.startsWith("## ")) {
+            slides.push({
+              title: line.replace(/^##\s+/, ""),
+              subtitle: mode === "executive" ? "Fallback summary" : "Fallback architecture summary",
+              bulletPoints: []
+            });
+            return slides;
+          }
+          if (!slides.length) {
+            slides.push({
+              title: mode === "executive" ? "Executive Summary" : "Architecture Summary",
+              subtitle: "Fallback summary",
+              bulletPoints: []
+            });
+          }
+          if (line.startsWith("- ") || line.startsWith("* ")) {
+            slides[slides.length - 1].bulletPoints.push(line.replace(/^[-*]\s+/, ""));
+          } else if (!line.startsWith("#")) {
+            slides[slides.length - 1].bulletPoints.push(line);
+          }
+          return slides;
+        }, [])
+        .filter((slide) => slide.bulletPoints.length)
+        .slice(0, 8)
     };
   }
 
   const persona = mode === "executive" ? "top-tier executive presentation designer" : "lead technical presentation designer";
   const structuralSlides =
     mode === "executive"
-      ? "1. Executive Summary\n2. Business Value & ROI\n3. Target Operating Model\n4. Core Differentiation\n5. Cognizant Strategic Value\n6. High-Level Timeline"
-      : "1. Architecture Summary\n2. Target State Integration\n3. Google Cloud Blueprint\n4. Cognizant Delivery IP\n5. Security & Governance\n6. Technical Roadmap KPIs";
+      ? "1. Executive Summary\n2. Account Context and Why Now\n3. Business Value and ROI\n4. Joint Google Cloud and Cognizant Solution Position\n5. Priority Sales Plays\n6. Buyer and Stakeholder Angles\n7. Timeline and Next Steps\n8. Source-backed Closing Summary"
+      : "1. Architecture Summary\n2. Current State and Problem Frame\n3. Target State Integration\n4. Google Cloud Platform Blueprint\n5. Cognizant Delivery and Operating Model\n6. Security, Governance, and Data Controls\n7. Phased Implementation Roadmap\n8. Architecture Risks, Dependencies, and KPIs";
 
   const prompt = `
-You are a ${persona}. Read the playbook below and summarize it into exactly 6 slides.
-Preserve the target company and named personas or specific titles whenever they appear.
+You are a ${persona}. Read the playbook below and summarize it into exactly 8 slides.
+Preserve the target company, named personas or specific titles, products, quantified claims, proof points, dependencies, and next steps whenever they appear.
+Do not collapse multiple important sections into one vague bullet.
+Each slide must contain 4 to 6 detailed bullet points.
+Each bullet should preserve concrete content from the source text, not generic paraphrase.
+If the playbook contains source references, timelines, risks, buyer names, or product/service pairings, keep them.
 
 PLAYBOOK TEXT:
 """
