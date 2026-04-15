@@ -711,6 +711,7 @@ function extractPersonaCandidateFromSnippet(
     .replace(/\s+with over.*$/i, "")
     .replace(/\s+/g, " ")
     .trim();
+  if (/\bchief technology and ai$/i.test(role)) role = `${role} Officer`;
 
   if (!looksLikePersonName(name)) return null;
   if (!role || role.length < 4 || role.length > 130) return null;
@@ -821,9 +822,10 @@ function extractPersonasFromProbeText(
               .replace(/\s+/g, " ")
               .trim()
           : parts[1];
+      const normalizedTitle = /\bchief technology and ai$/i.test(title) ? `${title} Officer` : title;
       const why = parts.length > 2 ? parts[parts.length - 1] : "";
       if (!looksLikePersonName(name)) return null;
-      if (looksIncompleteTitle(title)) return null;
+      if (looksIncompleteTitle(normalizedTitle)) return null;
       const relevantSource =
         sources.find((source) => `${source.title} ${source.url}`.toLowerCase().includes(name.toLowerCase().split(/\s+/)[0])) ||
         sources.find((source) => source.url.toLowerCase().includes("linkedin.com")) ||
@@ -832,7 +834,7 @@ function extractPersonasFromProbeText(
         companyName,
         {
           name,
-          title,
+          title: normalizedTitle,
           profileUrl: relevantSource?.url,
           sourceLabel: relevantSource ? sourceLabelFromProfileUrl(relevantSource.url) : "Live web research",
           whyNow:
