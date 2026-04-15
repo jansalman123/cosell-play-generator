@@ -793,6 +793,54 @@ function extractPersonasFromSearchSnippets(
     .slice(0, 4);
 }
 
+function extractPersonasFromProbeText(
+  companyName: string,
+  discoveryText: string,
+  sources: ProspectData["researchMetadata"]["sources"]
+): ProspectData["personas"] {
+  const lines = discoveryText
+    .split(/\n+/)
+    .map((line) => line.replace(/^[-*\d.\s]+/, "").trim())
+    .filter((line) => line && !/^none$/i.test(line));
+
+  const candidates = lines
+    .map((line, index) => {
+      const parts = line.split("|").map((part) => part.trim()).filter(Boolean);
+      if (parts.length < 2) return null;
+      const [name, title, why] = parts;
+      if (!looksLikePersonName(name)) return null;
+      const relevantSource =
+        sources.find((source) => `${source.title} ${source.url}`.toLowerCase().includes(name.toLowerCase().split(/\s+/)[0])) ||
+        sources.find((source) => source.url.toLowerCase().includes("linkedin.com")) ||
+        sources[0];
+      return buildPersonaFromCandidate(
+        companyName,
+        {
+          name,
+          title,
+          profileUrl: relevantSource?.url,
+          sourceLabel: relevantSource ? sourceLabelFromProfileUrl(relevantSource.url) : "Live web research",
+          whyNow:
+            why ||
+            `${name} was returned by live grounded research as ${title} at ${companyName}, making this a relevant stakeholder to verify.`,
+          linkedinSearchQuery: `site:linkedin.com/in/ "${companyName}" "${name}" "${title}"`
+        },
+        index
+      );
+    })
+    .filter(Boolean) as ProspectData["personas"];
+
+  return candidates
+    .filter((persona) => !isGenericPersonaName(persona.name, companyName))
+    .filter((persona) => personaRelevanceScore(persona) >= 4)
+    .filter((persona, index, list) => {
+      const key = persona.name.toLowerCase();
+      return list.findIndex((item) => item.name.toLowerCase() === key) === index;
+    })
+    .sort((left, right) => personaRelevanceScore(right) - personaRelevanceScore(left))
+    .slice(0, 4);
+}
+
 function decodeDuckDuckGoHref(rawHref: string): string | null {
   const decodedHref = rawHref.startsWith("//") ? `https:${rawHref}` : rawHref;
   try {
@@ -1377,6 +1425,9 @@ async function enrichRealPersonas(
   const sources = Array.from(sourceMap.values()).slice(0, 12);
 
   if (!discoveryText.trim()) return null;
+
+  const probeExtracted = extractPersonasFromProbeText(companyName, discoveryText, sources);
+  if (probeExtracted.length) return probeExtracted;
 
   let parsed: { personas?: unknown[] };
   try {
