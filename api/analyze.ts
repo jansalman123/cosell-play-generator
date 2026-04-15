@@ -457,6 +457,44 @@ function buildDiscoveryPrompt(companyName: string): string {
   ].join("\n");
 }
 
+function buildDiscoveryRepairPrompt(companyName: string, rawDiscoveryText: string): string {
+  return [
+    `Normalize this partially malformed grounded discovery output for ${companyName}.`,
+    "Return one valid JSON object only.",
+    "Do not add markdown fences or commentary.",
+    "Use these top-level fields only: companyName, companyWebsite, itSpendSignals, aiInitiatives, publicSignals, productHints.",
+    "For publicSignals include only: category, label, detail, strength.",
+    "For productHints include only: product, partner, rationale, reasonForNeed.",
+    "If a field is unclear, return an empty string or empty array instead of inventing content.",
+    `Malformed discovery text: ${rawDiscoveryText}`
+  ].join("\n");
+}
+
+async function repairDiscoveryPayload(
+  genAI: GoogleGenerativeAI,
+  companyName: string,
+  rawDiscoveryText: string
+): Promise<DiscoveryPayload> {
+  const repairModel = genAI.getGenerativeModel({
+    model: LIVE_RESEARCH_MODEL
+  });
+
+  const repairResponse = await withTimeout(
+    repairModel.generateContent({
+      contents: [{ role: "user", parts: [{ text: buildDiscoveryRepairPrompt(companyName, rawDiscoveryText) }] }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0,
+        maxOutputTokens: 900
+      }
+    }),
+    SYNTHESIS_TIMEOUT_MS,
+    "Gemini discovery repair"
+  );
+
+  return JSON.parse(extractJsonObject(repairResponse.response.text())) as DiscoveryPayload;
+}
+
 function buildSynthesisPrompt(companyName: string, discovery: DiscoveryPayload, sources: ProspectData["researchMetadata"]["sources"]): string {
   return [
     `Build a concise account prospecting brief for ${companyName}.`,
@@ -553,7 +591,12 @@ async function requestLiveProspect(
   );
 
   const discoveryText = discoveryResponse.response.text();
-  const discovery = JSON.parse(extractJsonPayload(discoveryText)) as DiscoveryPayload;
+  let discovery: DiscoveryPayload;
+  try {
+    discovery = JSON.parse(extractJsonObject(discoveryText)) as DiscoveryPayload;
+  } catch {
+    discovery = await repairDiscoveryPayload(genAI, companyName, discoveryText);
+  }
   const groundingMetadata = (discoveryResponse.response.candidates?.[0] as any)?.groundingMetadata;
   const groundingChunks = groundingMetadata?.groundingChunks ?? [];
   const groundedSources = groundingChunks
