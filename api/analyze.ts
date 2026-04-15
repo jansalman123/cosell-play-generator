@@ -1616,7 +1616,7 @@ export default async function handler(req: RequestWithBody, res: ResponseWithHel
     if (hasTimeBudget(startedAt, ENRICHMENT_TIMEOUT_MS * 2)) {
       try {
         const repairedPersonas = await withTimeout(
-          enrichRealPersonas(client, companyName),
+          enrichRealPersonas(genAI, companyName),
           ENRICHMENT_TIMEOUT_MS,
           "Persona enrichment"
         );
@@ -1632,7 +1632,7 @@ export default async function handler(req: RequestWithBody, res: ResponseWithHel
       try {
         const repairedCompetitors = await withTimeout(
           enrichRealCompetitors(
-            client,
+            genAI,
             companyName,
             `${data.executiveSummary.headline} ${data.strategicAiInitiatives.summary}`
           ),
