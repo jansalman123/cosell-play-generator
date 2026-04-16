@@ -220,6 +220,7 @@ function needsLiveRepair(account: ProspectData): boolean {
   const note = account.researchMetadata.note || "";
   return (
     account.researchMetadata.mode !== "live" ||
+    account.personas.length === 0 ||
     hasGenericPersonaNames(account) ||
     hasGenericCompetitorNames(account) ||
     note.includes("Recovered from saved browser history.") ||
